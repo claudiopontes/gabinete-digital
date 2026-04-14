@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
 import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
 import type { Layer } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -178,7 +177,7 @@ export default function MapaAcreContent({ onSelect }: Props = {}) {
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
         <div>
           <h1 className="text-xl font-bold text-gray-800 dark:text-white">
-            🗺️ IDEB por Município — Acre
+            IDEB Acre
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Clique em um município para selecioná-lo
@@ -186,30 +185,6 @@ export default function MapaAcreContent({ onSelect }: Props = {}) {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Botão Dashboard */}
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-600"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-            Entrar no Dashboard
-          </Link>
-
           {/* Toggle de visualização */}
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-gray-600 dark:bg-gray-700">
             <button
@@ -264,7 +239,7 @@ export default function MapaAcreContent({ onSelect }: Props = {}) {
 
             <MapContainer
               center={[-9.0, -70.0]}
-              zoom={6}
+              zoom={7}
               style={{ height: "100%", width: "100%" }}
               zoomControl={true}
             >

@@ -5,27 +5,13 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import {
-  BoxCubeIcon,
   CalenderIcon,
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
-  ListIcon,
-  PageIcon,
-  PieChartIcon,
-  PlugInIcon,
-  TableIcon,
   UserCircleIcon,
 } from "../icons/index";
 
-const MapIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-    <line x1="9" y1="3" x2="9" y2="18"/>
-    <line x1="15" y1="6" x2="15" y2="21"/>
-  </svg>
-);
-import SidebarWidget from "./SidebarWidget";
 
 type NavItem = {
   name: string;
@@ -37,8 +23,11 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
-    name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/", pro: false }],
+    name: "Painéis",
+    subItems: [
+      { name: "IDEB Acre", path: "/" },
+      { name: "Seletor de Município", path: "/gabinete-digital/seletor-municipio" },
+    ],
   },
   {
     icon: <CalenderIcon />,
@@ -46,79 +35,19 @@ const navItems: NavItem[] = [
     path: "/calendar",
   },
   {
-    icon: <MapIcon />,
-    name: "Gabinete Digital",
-    subItems: [
-      { name: "Mapa IDEB", path: "/gabinete-digital/mapa" },
-      { name: "Seletor de Município", path: "/gabinete-digital/seletor-municipio" },
-    ],
-  },
-  {
     icon: <UserCircleIcon />,
-    name: "User Profile",
+    name: "Perfil",
     path: "/profile",
   },
-
-  {
-    name: "Forms",
-    icon: <ListIcon />,
-    subItems: [{ name: "Form Elements", path: "/form-elements", pro: false }],
-  },
-  {
-    name: "Tables",
-    icon: <TableIcon />,
-    subItems: [{ name: "Basic Tables", path: "/basic-tables", pro: false }],
-  },
-  {
-    name: "Pages",
-    icon: <PageIcon />,
-    subItems: [
-      { name: "Blank Page", path: "/blank", pro: false },
-      { name: "404 Error", path: "/error-404", pro: false },
-    ],
-  },
 ];
 
-const othersItems: NavItem[] = [
-  {
-    icon: <PieChartIcon />,
-    name: "Charts",
-    subItems: [
-      { name: "Line Chart", path: "/line-chart", pro: false },
-      { name: "Bar Chart", path: "/bar-chart", pro: false },
-    ],
-  },
-  {
-    icon: <BoxCubeIcon />,
-    name: "UI Elements",
-    subItems: [
-      { name: "Alerts", path: "/alerts", pro: false },
-      { name: "Avatar", path: "/avatars", pro: false },
-      { name: "Badge", path: "/badge", pro: false },
-      { name: "Buttons", path: "/buttons", pro: false },
-      { name: "Images", path: "/images", pro: false },
-      { name: "Videos", path: "/videos", pro: false },
-    ],
-  },
-  {
-    icon: <PlugInIcon />,
-    name: "Authentication",
-    subItems: [
-      { name: "Sign In", path: "/signin", pro: false },
-      { name: "Sign Up", path: "/signup", pro: false },
-    ],
-  },
-];
 
 const getSubmenuFromPath = (
   path: string
 ): { type: "main" | "others"; index: number } | null => {
-  for (const menuType of ["main", "others"] as const) {
-    const items = menuType === "main" ? navItems : othersItems;
-    for (let index = 0; index < items.length; index++) {
-      if (items[index].subItems?.some((sub) => sub.path === path)) {
-        return { type: menuType, index };
-      }
+  for (let index = 0; index < navItems.length; index++) {
+    if (navItems[index].subItems?.some((sub) => sub.path === path)) {
+      return { type: "main", index };
     }
   }
   return null;
@@ -262,18 +191,16 @@ const AppSidebar: React.FC = () => {
     {}
   );
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [prevPathname, setPrevPathname] = useState(pathname);
 
   const isActive = useCallback((path: string) => path === pathname, [pathname]);
 
-  // Atualiza o submenu aberto quando a rota muda (sem useEffect para evitar render cascata)
-  if (prevPathname !== pathname) {
-    setPrevPathname(pathname);
-    setOpenSubmenu(getSubmenuFromPath(pathname));
-  }
-
+  // Sincroniza o submenu aberto quando a rota muda
   useEffect(() => {
-    // Set the height of the submenu items when the submenu is opened
+    setOpenSubmenu(getSubmenuFromPath(pathname));
+  }, [pathname]);
+
+  // Atualiza a altura do submenu quando ele é aberto
+  useEffect(() => {
     if (openSubmenu !== null) {
       const key = `${openSubmenu.type}-${openSubmenu.index}`;
       if (subMenuRefs.current[key]) {
@@ -366,25 +293,8 @@ const AppSidebar: React.FC = () => {
               {renderMenuItems(navItems, "main")}
             </div>
 
-            <div className="">
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Others"
-                ) : (
-                  <HorizontaLDots />
-                )}
-              </h2>
-              {renderMenuItems(othersItems, "others")}
-            </div>
           </div>
         </nav>
-        {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
       </div>
     </aside>
   );
