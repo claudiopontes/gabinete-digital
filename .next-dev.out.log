@@ -132,3 +132,16 @@ Creating turbopack project {
 ✓ Compiled in 469ms
  GET /painel-combustivel 200 in 866ms (next.js: 277ms, application-code: 589ms)
 ✓ Compiled in 286ms
+ GET /painel-combustivel 200 in 884ms (next.js: 222ms, application-code: 662ms)
+ GET /painel-combustivel?emitente=AUTO+POSTO+ROSELLAO 200 in 35ms (next.js: 6ms, application-code: 30ms)
+ GET /painel-combustivel 200 in 13ms (next.js: 4ms, application-code: 9ms)
+ GET /painel-combustivel 200 in 38ms (next.js: 3ms, application-code: 35ms)
+ GET /painel-combustivel?emitente=30.520.384+RODRIGO+SOUZA+AGUIAR 200 in 65ms (next.js: 8ms, application-code: 57ms)
+ GET /painel-combustivel 200 in 10ms (next.js: 3ms, application-code: 7ms)
+ GET /painel-combustivel 200 in 47ms (next.js: 4ms, application-code: 43ms)
+ GET /painel-combustivel?entidade=POLICIA+MILITAR+DO+ESTADO+DO+ACRE+-+PMAC 200 in 50ms (next.js: 5ms, application-code: 45ms)
+ GET /painel-combustivel?entidade=POLICIA+MILITAR+DO+ESTADO+DO+ACRE+-+PMAC 200 in 45ms (next.js: 4ms, application-code: 40ms)
+ GET /painel-combustivel?entidade=POLICIA+MILITAR+DO+ESTADO+DO+ACRE+-+PMAC 200 in 61ms (next.js: 7ms, application-code: 54ms)
+ GET /painel-combustivel?entidade=POLICIA+MILITAR+DO+ESTADO+DO+ACRE+-+PMAC 200 in 64ms (next.js: 4ms, application-code: 60ms)
+ GET /painel-combustivel 200 in 15ms (next.js: 4ms, application-code: 11ms)
+ GET /painel-combustivel 200 in 50ms (next.js: 6ms, application-code: 44ms)
