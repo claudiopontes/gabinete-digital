@@ -27,6 +27,7 @@ yarn-debug.log*
 yarn-error.log*
 dev-server*.log
 .next-dev*.log
+etl/logs/
 
 # local env files
 .env*.local
