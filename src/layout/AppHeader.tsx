@@ -119,9 +119,9 @@ const AppHeader: React.FC = () => {
 
         {/* Linha direita: fonte de dados + botão troca painel + última atualização + ações */}
         <div
-          className={`${isApplicationMenuOpen ? "flex" : "hidden"} w-full items-center justify-between gap-4 px-5 py-4 shadow-theme-md lg:flex lg:justify-end lg:px-0 lg:shadow-none`}
+          className={`${isApplicationMenuOpen ? "flex" : "hidden"} w-full items-center justify-between gap-4 overflow-x-auto px-5 py-4 shadow-theme-md lg:flex lg:justify-end lg:overflow-visible lg:px-0 lg:shadow-none`}
         >
-          <div className="flex items-center gap-2 2xsm:gap-3">
+          <div className="flex min-w-max items-center gap-2 2xsm:gap-3 lg:min-w-0">
 
 
             {/* Painel Empenhos: fonte + botão notas fiscais */}

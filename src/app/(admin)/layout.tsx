@@ -22,7 +22,9 @@ export default function AdminLayout({
     ? "lg:ml-[290px]"
     : "lg:ml-[90px]";
   const contentPaddingClass =
-    pathname === "/painel-combustivel" ? "px-4 pb-4 pt-1 md:px-6 md:pb-6 md:pt-2" : "p-4 md:p-6";
+    pathname === "/painel-combustivel" || pathname === "/painel-combustivel-empenhos"
+      ? "px-4 pb-4 pt-1 md:px-6 md:pb-6 md:pt-2"
+      : "p-4 md:p-6";
 
   return (
     <div className="min-h-screen xl:flex">

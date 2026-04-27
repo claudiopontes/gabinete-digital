@@ -439,10 +439,11 @@ export default function PainelEmpenhoClient() {
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
-      <div className="flex min-w-[1100px] flex-col gap-4 p-4 sm:p-6">
+    <div className="w-full max-w-full min-w-0 space-y-3">
       {/* Filtros inline (mobile) */}
-      <div className="flex flex-wrap items-center gap-2 lg:hidden">
+      <div className="min-w-0 lg:hidden">
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
         <FilterPill
           label="Entidade"
           value={selectedEntidade}
@@ -470,15 +471,17 @@ export default function PainelEmpenhoClient() {
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+            className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
           >
             Limpar filtros
           </button>
         )}
+          </div>
+        </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Valor Empenhado"
           value={formatMoney(totalEmpenhado)}
@@ -513,11 +516,15 @@ export default function PainelEmpenhoClient() {
         onHighlight={setHighlightedChart}
         className={highlightClass("line")}
       >
-        <Chart options={lineOptions} series={lineSeries} type="line" height={280} width="100%" />
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            <Chart options={lineOptions} series={lineSeries} type="line" height={280} width="100%" />
+          </div>
+        </div>
       </ChartCard>
 
       {/* Treemap + Pizza */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Valor Empenhado por Entidade"
           chartKey="treemap"
@@ -525,7 +532,11 @@ export default function PainelEmpenhoClient() {
           onHighlight={setHighlightedChart}
           className={highlightClass("treemap")}
         >
-          <Chart options={treemapOptions} series={treemapSeries} type="treemap" height={280} width="100%" />
+          <div className="overflow-x-auto">
+            <div className="min-w-[480px]">
+              <Chart options={treemapOptions} series={treemapSeries} type="treemap" height={280} width="100%" />
+            </div>
+          </div>
         </ChartCard>
 
         <ChartCard
@@ -536,7 +547,11 @@ export default function PainelEmpenhoClient() {
           className={highlightClass("pie")}
         >
           {pieSeries.length > 0 ? (
-            <Chart options={pieOptions} series={pieSeries} type="pie" height={280} width="100%" />
+            <div className="overflow-x-auto">
+              <div className="min-w-[360px]">
+                <Chart options={pieOptions} series={pieSeries} type="pie" height={280} width="100%" />
+              </div>
+            </div>
           ) : (
             <Empty />
           )}
@@ -544,7 +559,7 @@ export default function PainelEmpenhoClient() {
       </div>
 
       {/* Donut + Barras credores */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Forma de Fornecimento"
           chartKey="donut"
@@ -553,7 +568,11 @@ export default function PainelEmpenhoClient() {
           className={highlightClass("donut")}
         >
           {donutSeries.length > 0 ? (
-            <Chart options={donutOptions} series={donutSeries} type="donut" height={280} width="100%" />
+            <div className="overflow-x-auto">
+              <div className="min-w-[360px]">
+                <Chart options={donutOptions} series={donutSeries} type="donut" height={280} width="100%" />
+              </div>
+            </div>
           ) : (
             <Empty />
           )}
@@ -567,7 +586,11 @@ export default function PainelEmpenhoClient() {
           className={highlightClass("credorBar")}
         >
           {credorBar.length > 0 ? (
-            <Chart options={credorBarOptions} series={credorBarSeries} type="bar" height={280} width="100%" />
+            <div className="overflow-x-auto">
+              <div className="min-w-[560px]">
+                <Chart options={credorBarOptions} series={credorBarSeries} type="bar" height={280} width="100%" />
+              </div>
+            </div>
           ) : (
             <Empty />
           )}
@@ -583,12 +606,15 @@ export default function PainelEmpenhoClient() {
         className={highlightClass("pareto")}
       >
         {credorPareto.length > 0 ? (
-          <Chart options={paretoOptions} series={paretoSeries} type="bar" height={300} width="100%" />
+          <div className="overflow-x-auto">
+            <div className="min-w-[700px]">
+              <Chart options={paretoOptions} series={paretoSeries} type="bar" height={300} width="100%" />
+            </div>
+          </div>
         ) : (
           <Empty />
         )}
       </ChartCard>
-      </div>
     </div>
   );
 }
@@ -620,7 +646,7 @@ function KpiCard({
   };
 
   return (
-    <div className={`rounded-xl border p-4 ${palette[color]}`}>
+    <div className={`min-w-0 rounded-xl border p-4 ${palette[color]}`}>
       <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{title}</p>
       <p className={`mt-1 text-lg font-bold leading-tight ${textPalette[color]}`}>{value}</p>
       {delta !== null && (
@@ -651,7 +677,7 @@ function ChartCard({
 }) {
   return (
     <div
-      className={`rounded-xl border border-gray-200 bg-white p-4 transition-all dark:border-gray-700 dark:bg-gray-900 ${className}`}
+      className={`min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all dark:border-gray-700 dark:bg-gray-900 ${className}`}
       onMouseEnter={() => onHighlight(chartKey)}
       onMouseLeave={() => onHighlight(null)}
     >
@@ -676,7 +702,7 @@ function FilterPill({
     <select
       value={value}
       onChange={(e) => onSelect(e.target.value)}
-      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+      className="min-w-[180px] shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
     >
       <option value="all">Todos ({label})</option>
       {options.map((opt) => (
