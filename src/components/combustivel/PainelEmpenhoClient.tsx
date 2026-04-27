@@ -35,16 +35,28 @@ function formatMoney(value: number): string {
 }
 
 function formatMillions(value: number): string {
-  if (value >= 1_000_000)
-    return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value / 1_000_000)} Mi`;
-  if (value >= 1_000)
-    return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value / 1_000)} mil`;
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
+  if (value >= 1_000_000) {
+    return `${new Intl.NumberFormat("pt-BR", {
+      maximumFractionDigits: 2,
+    }).format(value / 1_000_000)} Mi`;
+  }
+
+  if (value >= 1_000) {
+    return `${new Intl.NumberFormat("pt-BR", {
+      maximumFractionDigits: 2,
+    }).format(value / 1_000)} mil`;
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function formatDeltaPercent(value: number): string {
   const signal = value > 0 ? "+" : "";
-  return `${signal}${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value)}%`;
+  return `${signal}${new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 1,
+  }).format(value)}%`;
 }
 
 function monthKey(dateStr: string): string {
@@ -53,17 +65,34 @@ function monthKey(dateStr: string): string {
 
 function toMonthLabel(value: string | null): string {
   if (!value) return "--/----";
+
   const [year, month] = value.split("-");
   if (!year || !month) return value;
+
   return `${month}/${year}`;
+}
+
+function formatDateBR(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
+
   if (typeof error === "object" && error !== null && "message" in error) {
     const msg = (error as { message?: unknown }).message;
     return typeof msg === "string" ? msg : String(msg);
   }
+
   return String(error);
 }
 
@@ -72,6 +101,7 @@ export default function PainelEmpenhoClient() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlightedChart, setHighlightedChart] = useState<ChartKey | null>(null);
@@ -100,11 +130,6 @@ export default function PainelEmpenhoClient() {
         const pageSize = 1000;
         let offset = 0;
         const out: EmpenhoRow[] = [];
-        const updatePromise = supabase
-          .from("tb_despesa_combustivel_polanco")
-          .select("dt_carga_etl")
-          .order("dt_carga_etl", { ascending: false })
-          .limit(1);
 
         while (true) {
           const { data, error } = await supabase
@@ -119,42 +144,39 @@ export default function PainelEmpenhoClient() {
 
           const batch = (data ?? []) as EmpenhoRow[];
           out.push(...batch);
+
           if (batch.length < pageSize) break;
           offset += pageSize;
         }
 
         if (!active) return;
+
         setRows(out);
 
-        try {
-          const { data: updateData } = await updatePromise;
-          const raw = (updateData?.[0] as { dt_carga_etl?: string } | undefined)?.dt_carga_etl;
-          if (raw) {
-            setLastUpdateLabel(
-              new Date(raw).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }),
-            );
-          } else {
-            setLastUpdateLabel(null);
-          }
-        } catch {
-          setLastUpdateLabel(null);
-        }
+        const mostRecentDate = out
+          .map((row) => row.data_empenho)
+          .filter(Boolean)
+          .sort()
+          .at(-1);
+
+        setLastUpdateLabel(formatDateBR(mostRecentDate));
 
         setLoading(false);
       } catch (err) {
         if (!active) return;
+
         setError(extractErrorMessage(err) || "Falha ao carregar dados");
         setLoading(false);
       }
     }
 
     load();
+
     return () => {
       active = false;
     };
   }, []);
 
-  // Opções de filtro
   const availableTipos = useMemo(
     () => [...new Set(rows.map((r) => r.tipo_combustivel))].sort((a, b) => a.localeCompare(b, "pt-BR")),
     [rows],
@@ -175,7 +197,6 @@ export default function PainelEmpenhoClient() {
     [rows],
   );
 
-  // Linhas filtradas
   const filteredRows = useMemo(() => {
     let r = rows;
 
@@ -201,7 +222,6 @@ export default function PainelEmpenhoClient() {
     return r;
   }, [rows, selectedEntidade, selectedTipos, selectedCredor, selectedForma]);
 
-  // KPIs
   const totalEmpenhado = useMemo(
     () => filteredRows.reduce((s, r) => s + (r.valor_empenho ?? 0), 0),
     [filteredRows],
@@ -215,16 +235,17 @@ export default function PainelEmpenhoClient() {
   const pctExecutado = totalEmpenhado > 0 ? (totalLiquidado / totalEmpenhado) * 100 : 0;
   const qtdEmpenhos = filteredRows.length;
 
-  // KPI variação MoM
   const kpiVariation = useMemo(() => {
     const byMonth = new Map<string, { emp: number; liq: number; qtd: number }>();
 
     for (const r of filteredRows) {
       const key = monthKey(r.data_empenho);
       const cur = byMonth.get(key) ?? { emp: 0, liq: 0, qtd: 0 };
+
       cur.emp += r.valor_empenho ?? 0;
       cur.liq += r.valor_liquidado ?? 0;
       cur.qtd += 1;
+
       byMonth.set(key, cur);
     }
 
@@ -243,15 +264,16 @@ export default function PainelEmpenhoClient() {
     return { deltaEmp, deltaLiq, deltaQtd };
   }, [filteredRows]);
 
-  // Série mensal (linha)
   const monthlySeries = useMemo(() => {
     const byMonth = new Map<string, { emp: number; liq: number }>();
 
     for (const r of filteredRows) {
       const key = monthKey(r.data_empenho);
       const cur = byMonth.get(key) ?? { emp: 0, liq: 0 };
+
       cur.emp += r.valor_empenho ?? 0;
       cur.liq += r.valor_liquidado ?? 0;
+
       byMonth.set(key, cur);
     }
 
@@ -264,7 +286,6 @@ export default function PainelEmpenhoClient() {
     };
   }, [filteredRows]);
 
-  // Treemap entidades
   const entidadeTreemap = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -278,7 +299,6 @@ export default function PainelEmpenhoClient() {
       .map(([x, y]) => ({ x, y: +y.toFixed(2) }));
   }, [filteredRows]);
 
-  // Pizza tipo combustível
   const tipoPie = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -289,7 +309,6 @@ export default function PainelEmpenhoClient() {
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [filteredRows]);
 
-  // Donut forma fornecimento
   const formaDonut = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -300,7 +319,6 @@ export default function PainelEmpenhoClient() {
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [filteredRows]);
 
-  // TOP credores (barras)
   const credorBar = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -316,19 +334,22 @@ export default function PainelEmpenhoClient() {
       .map(([name, value]) => ({ name, value: +value.toFixed(2) }));
   }, [filteredRows]);
 
-  // Pareto credores
   const credorPareto = useMemo(() => {
     const sorted = [...credorBar].sort((a, b) => b.value - a.value).slice(0, 15);
     const total = sorted.reduce((s, r) => s + r.value, 0);
+
     let acc = 0;
 
     return sorted.map((item) => {
       acc += item.value;
-      return { name: item.name, value: item.value, acumulado: +((acc / total) * 100).toFixed(1) };
+      return {
+        name: item.name,
+        value: item.value,
+        acumulado: total > 0 ? +((acc / total) * 100).toFixed(1) : 0,
+      };
     });
   }, [credorBar]);
 
-  // Helpers de filtro via URL
   function setFilter(key: string, value: string | string[]) {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -340,7 +361,9 @@ export default function PainelEmpenhoClient() {
       else params.set(key, value);
     }
 
-    router.replace(`/painel-combustivel-empenhos?${params.toString()}`, { scroll: false });
+    router.replace(`/painel-combustivel-empenhos?${params.toString()}`, {
+      scroll: false,
+    });
   }
 
   function clearAllFilters() {
@@ -353,18 +376,24 @@ export default function PainelEmpenhoClient() {
     selectedCredor !== "all" ||
     selectedForma !== "all";
 
-  // Highlight helper
   function highlightClass(key: ChartKey) {
     if (!highlightedChart) return "";
     return highlightedChart === key ? "ring-2 ring-orange-400" : "opacity-40";
   }
 
-  // ApexCharts: Linha
   const lineOptions: ApexOptions = {
-    chart: { type: "line", toolbar: { show: false }, zoom: { enabled: false }, background: "transparent" },
+    chart: {
+      type: "line",
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      background: "transparent",
+    },
     colors: ["#f97316", "#3b82f6"],
     stroke: { curve: "smooth", width: [2, 2] },
-    xaxis: { categories: monthlySeries.categories, labels: { style: { fontSize: "11px" } } },
+    xaxis: {
+      categories: monthlySeries.categories,
+      labels: { style: { fontSize: "11px" } },
+    },
     yaxis: {
       labels: {
         formatter: (v) => formatMillions(v),
@@ -382,7 +411,6 @@ export default function PainelEmpenhoClient() {
     { name: "Liquidado", data: monthlySeries.liquidado },
   ];
 
-  // ApexCharts: Treemap
   const treemapOptions: ApexOptions = {
     chart: {
       type: "treemap",
@@ -392,6 +420,7 @@ export default function PainelEmpenhoClient() {
         dataPointSelection: (_e, _chart, config) => {
           const label: string | undefined = entidadeTreemap[config.dataPointIndex]?.x;
           if (!label) return;
+
           const norm = normalizeName(label);
           setFilter("entidade", norm === normalizeName(selectedEntidade) ? "all" : label);
         },
@@ -405,7 +434,6 @@ export default function PainelEmpenhoClient() {
 
   const treemapSeries = [{ data: entidadeTreemap }];
 
-  // ApexCharts: Pizza tipo
   const pieOptions: ApexOptions = {
     chart: { type: "pie", toolbar: { show: false }, background: "transparent" },
     labels: tipoPie.map(([label]) => label),
@@ -417,7 +445,6 @@ export default function PainelEmpenhoClient() {
 
   const pieSeries = tipoPie.map(([, v]) => v);
 
-  // ApexCharts: Donut forma fornecimento
   const donutOptions: ApexOptions = {
     chart: { type: "donut", toolbar: { show: false }, background: "transparent" },
     labels: formaDonut.map(([label]) => label),
@@ -430,12 +457,16 @@ export default function PainelEmpenhoClient() {
 
   const donutSeries = formaDonut.map(([, v]) => v);
 
-  // ApexCharts: Barras credores
   const credorBarOptions: ApexOptions = {
     chart: { type: "bar", toolbar: { show: false }, background: "transparent" },
     plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
     colors: ["#f97316"],
-    xaxis: { labels: { formatter: (v) => formatMillions(Number(v)), style: { fontSize: "10px" } } },
+    xaxis: {
+      labels: {
+        formatter: (v) => formatMillions(Number(v)),
+        style: { fontSize: "10px" },
+      },
+    },
     yaxis: { labels: { style: { fontSize: "10px" }, maxWidth: 180 } },
     tooltip: { y: { formatter: (v) => formatMoney(v) } },
     theme: { mode: "light" },
@@ -443,10 +474,12 @@ export default function PainelEmpenhoClient() {
   };
 
   const credorBarSeries = [
-    { name: "Empenhado", data: credorBar.map((r) => ({ x: r.name, y: r.value })) },
+    {
+      name: "Empenhado",
+      data: credorBar.map((r) => ({ x: r.name, y: r.value })),
+    },
   ];
 
-  // ApexCharts: Pareto
   const paretoOptions: ApexOptions = {
     chart: { type: "bar", toolbar: { show: false }, background: "transparent" },
     plotOptions: { bar: { borderRadius: 4 } },
@@ -457,18 +490,29 @@ export default function PainelEmpenhoClient() {
       labels: { rotate: -35, style: { fontSize: "10px" } },
     },
     yaxis: [
-      { labels: { formatter: (v) => formatMillions(v), style: { fontSize: "10px" } } },
+      {
+        labels: {
+          formatter: (v) => formatMillions(v),
+          style: { fontSize: "10px" },
+        },
+      },
       {
         opposite: true,
         min: 0,
         max: 100,
-        labels: { formatter: (v) => `${v.toFixed(0)}%`, style: { fontSize: "10px" } },
+        labels: {
+          formatter: (v) => `${v.toFixed(0)}%`,
+          style: { fontSize: "10px" },
+        },
       },
     ],
     tooltip: {
       shared: true,
       intersect: false,
-      y: [{ formatter: (v) => formatMoney(v) }, { formatter: (v) => `${v.toFixed(1)}%` }],
+      y: [
+        { formatter: (v) => formatMoney(v) },
+        { formatter: (v) => `${v.toFixed(1)}%` },
+      ],
     },
     legend: { position: "top" },
     theme: { mode: "light" },
@@ -480,7 +524,6 @@ export default function PainelEmpenhoClient() {
     { name: "Acumulado %", type: "line", data: credorPareto.map((r) => r.acumulado) },
   ];
 
-  // Render
   if (loading) {
     return (
       <div className="flex items-center justify-center p-16 text-gray-400">
@@ -540,7 +583,7 @@ export default function PainelEmpenhoClient() {
       </div>
 
       {/* Linha superior: KPIs + metadados/ações */}
-      <div className="grid w-full min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px] xl:items-stretch">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_240px] 2xl:grid-cols-[minmax(0,1fr)_260px] xl:items-stretch">
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title="Valor Empenhado"
@@ -556,7 +599,9 @@ export default function PainelEmpenhoClient() {
           />
           <KpiCard
             title="Execução Orçamentária"
-            value={`${pctExecutado.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
+            value={`${pctExecutado.toLocaleString("pt-BR", {
+              maximumFractionDigits: 1,
+            })}%`}
             delta={null}
             color="green"
           />
@@ -572,12 +617,12 @@ export default function PainelEmpenhoClient() {
           <div className="flex h-full w-full flex-col gap-2">
             <Link
               href="/painel-combustivel"
-              className="group relative inline-flex h-9 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-orange-300 bg-gradient-to-r from-orange-500 to-amber-500 px-3 text-[11px] font-extrabold uppercase tracking-[0.02em] text-white shadow-md shadow-orange-300/40 transition hover:from-orange-600 hover:to-amber-600 hover:shadow-lg hover:shadow-orange-300/50 dark:border-orange-700 dark:from-orange-700 dark:to-amber-700 dark:shadow-none"
+              className="group relative inline-flex h-8 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-orange-300 bg-gradient-to-r from-orange-500 to-amber-500 px-3 text-[10px] font-extrabold uppercase tracking-[0.02em] text-white shadow-sm shadow-orange-300/40 transition hover:from-orange-600 hover:to-amber-600 hover:shadow-md hover:shadow-orange-300/50 dark:border-orange-700 dark:from-orange-700 dark:to-amber-700 dark:shadow-none"
             >
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.3),transparent_40%)] opacity-90 transition group-hover:opacity-100" />
 
               <svg
-                className="relative h-3.5 w-3.5 shrink-0"
+                className="relative h-3 w-3 shrink-0"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
@@ -593,23 +638,23 @@ export default function PainelEmpenhoClient() {
               <span className="relative">Notas Fiscais</span>
             </Link>
 
-            <div className="flex min-h-[84px] flex-1 flex-col justify-center rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-2.5 shadow-sm shadow-sky-100/70 ring-1 ring-white/60 dark:border-sky-800/60 dark:bg-slate-900/30 dark:shadow-none dark:ring-sky-900/20">
+            <div className="flex min-h-[76px] flex-1 flex-col justify-center rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-2 shadow-sm shadow-sky-100/70 ring-1 ring-white/60 dark:border-sky-800/60 dark:bg-slate-900/30 dark:shadow-none dark:ring-sky-900/20">
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">
+                <p className="text-[8px] font-semibold uppercase tracking-[0.15em] text-sky-600 dark:text-sky-400">
                   FONTE DOS DADOS
                 </p>
-                <p className="mt-0.5 text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">
+                <p className="mt-0.5 text-xs font-bold leading-tight text-slate-900 dark:text-slate-100">
                   Empenhos SIPAC
                 </p>
               </div>
 
-              <div className="my-2 h-px w-full bg-sky-200/90 dark:bg-sky-800/60" />
+              <div className="my-1.5 h-px w-full bg-sky-200/90 dark:bg-sky-800/60" />
 
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">
+                <p className="text-[8px] font-semibold uppercase tracking-[0.15em] text-sky-600 dark:text-sky-400">
                   ÚLTIMA ATUALIZAÇÃO
                 </p>
-                <p className="mt-0.5 text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">
+                <p className="mt-0.5 text-xs font-bold leading-tight text-slate-900 dark:text-slate-100">
                   {lastUpdateLabel ?? "—"}
                 </p>
               </div>
@@ -627,8 +672,8 @@ export default function PainelEmpenhoClient() {
         className={highlightClass("line")}
       >
         <div className="-mx-1 overflow-x-auto px-1">
-          <div className="min-w-[900px]">
-            <Chart options={lineOptions} series={lineSeries} type="line" height={280} width="100%" />
+          <div className="min-w-[760px]">
+            <Chart options={lineOptions} series={lineSeries} type="line" height={270} width="100%" />
           </div>
         </div>
       </ChartCard>
@@ -643,8 +688,8 @@ export default function PainelEmpenhoClient() {
           className={highlightClass("treemap")}
         >
           <div className="overflow-x-auto">
-            <div className="min-w-[480px]">
-              <Chart options={treemapOptions} series={treemapSeries} type="treemap" height={280} width="100%" />
+            <div className="min-w-[440px]">
+              <Chart options={treemapOptions} series={treemapSeries} type="treemap" height={270} width="100%" />
             </div>
           </div>
         </ChartCard>
@@ -658,8 +703,8 @@ export default function PainelEmpenhoClient() {
         >
           {pieSeries.length > 0 ? (
             <div className="overflow-x-auto">
-              <div className="min-w-[360px]">
-                <Chart options={pieOptions} series={pieSeries} type="pie" height={280} width="100%" />
+              <div className="min-w-[340px]">
+                <Chart options={pieOptions} series={pieSeries} type="pie" height={270} width="100%" />
               </div>
             </div>
           ) : (
@@ -679,8 +724,8 @@ export default function PainelEmpenhoClient() {
         >
           {donutSeries.length > 0 ? (
             <div className="overflow-x-auto">
-              <div className="min-w-[360px]">
-                <Chart options={donutOptions} series={donutSeries} type="donut" height={280} width="100%" />
+              <div className="min-w-[340px]">
+                <Chart options={donutOptions} series={donutSeries} type="donut" height={270} width="100%" />
               </div>
             </div>
           ) : (
@@ -697,8 +742,8 @@ export default function PainelEmpenhoClient() {
         >
           {credorBar.length > 0 ? (
             <div className="overflow-x-auto">
-              <div className="min-w-[560px]">
-                <Chart options={credorBarOptions} series={credorBarSeries} type="bar" height={280} width="100%" />
+              <div className="min-w-[500px]">
+                <Chart options={credorBarOptions} series={credorBarSeries} type="bar" height={270} width="100%" />
               </div>
             </div>
           ) : (
@@ -717,8 +762,8 @@ export default function PainelEmpenhoClient() {
       >
         {credorPareto.length > 0 ? (
           <div className="overflow-x-auto">
-            <div className="min-w-[700px]">
-              <Chart options={paretoOptions} series={paretoSeries} type="bar" height={300} width="100%" />
+            <div className="min-w-[620px]">
+              <Chart options={paretoOptions} series={paretoSeries} type="bar" height={290} width="100%" />
             </div>
           </div>
         ) : (
@@ -728,8 +773,6 @@ export default function PainelEmpenhoClient() {
     </div>
   );
 }
-
-// Sub-componentes
 
 function KpiCard({
   title,
@@ -757,12 +800,13 @@ function KpiCard({
   };
 
   return (
-    <div className={`min-w-0 rounded-xl border p-4 ${palette[color]}`}>
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{title}</p>
-      <p className={`mt-1 text-lg font-bold leading-tight ${textPalette[color]}`}>{value}</p>
+    <div className={`min-w-0 rounded-xl border p-3.5 ${palette[color]}`}>
+      <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{title}</p>
+      <p className={`mt-1 text-base font-bold leading-tight ${textPalette[color]}`}>{value}</p>
+
       {delta !== null && (
         <p
-          className={`mt-0.5 text-xs font-medium ${
+          className={`mt-0.5 text-[11px] font-medium ${
             delta >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
           }`}
         >
@@ -790,7 +834,7 @@ function ChartCard({
 }) {
   return (
     <div
-      className={`min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all dark:border-gray-700 dark:bg-gray-900 ${className}`}
+      className={`min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-3.5 transition-all dark:border-gray-700 dark:bg-gray-900 ${className}`}
       onMouseEnter={() => onHighlight(chartKey)}
       onMouseLeave={() => onHighlight(null)}
     >
