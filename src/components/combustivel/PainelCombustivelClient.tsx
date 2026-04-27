@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { ApexOptions } from "apexcharts";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CombustivelHeaderFilters from "@/components/combustivel/CombustivelHeaderFilters";
 import {
@@ -106,6 +107,7 @@ export default function PainelCombustivelClient() {
   const [mensalRows, setMensalRows] = useState<MensalRow[]>([]);
   const [municipios, setMunicipios] = useState<MunicipioRow[]>([]);
   const [hasMensalEmitente, setHasMensalEmitente] = useState(false);
+  const [lastUpdateLabel, setLastUpdateLabel] = useState<string | null>(null);
 
   const selectedMunicipio = searchParams.get("municipio") ?? "all";
   const selectedEntidade = searchParams.get("entidade") ?? "all";
@@ -216,7 +218,7 @@ export default function PainelCombustivelClient() {
       const client = supabase;
 
       try {
-        const [mensalResult, municipioData] = await Promise.all([
+        const [mensalResult, municipioData, updateData] = await Promise.all([
           (async () => {
             try {
               return await fetchAllMensalRows(client);
@@ -228,6 +230,11 @@ export default function PainelCombustivelClient() {
             }
           })(),
           fetchAllMunicipioRows(client),
+          client
+            .from("combustivel_mensal")
+            .select("atualizado_em")
+            .order("atualizado_em", { ascending: false })
+            .limit(1),
         ]);
 
         if (!active) return;
@@ -235,6 +242,14 @@ export default function PainelCombustivelClient() {
         setMensalRows(mensalResult.rows);
         setHasMensalEmitente(mensalResult.hasEmitente);
         setMunicipios(municipioData);
+
+        const raw = (updateData.data?.[0] as { atualizado_em?: string } | undefined)?.atualizado_em;
+        if (raw) {
+          setLastUpdateLabel(
+            new Date(raw).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          );
+        }
+
         setLoading(false);
       } catch (error) {
         if (!active) return;
@@ -953,7 +968,7 @@ export default function PainelCombustivelClient() {
         <CombustivelHeaderFilters />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className={kpiCardClass}>
           <div className={kpiHeaderClass}>
             <h3 className={panelTitleClass}>Valor Total</h3>
@@ -1022,6 +1037,36 @@ export default function PainelCombustivelClient() {
             ) : null}
           </div>
         </div>
+
+        <div className="flex flex-col gap-2">
+          {/* Botão Empenhos SIPAC */}
+          <Link
+            href="/painel-combustivel-empenhos"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            Empenhos SIPAC
+          </Link>
+
+          {/* Box Fonte + Atualização */}
+          <div className="flex flex-1 flex-col justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 p-3 shadow-sm dark:border-orange-800/60 dark:bg-orange-900/20">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-orange-400 dark:text-orange-500">Fonte dos Dados</p>
+              <p className="text-xs font-bold text-gray-700 dark:text-gray-200">Notas Fiscais Emitidas</p>
+            </div>
+            <div className="border-t border-orange-200 dark:border-orange-800/60" />
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-orange-400 dark:text-orange-500">Última Atualização</p>
+              <p className="text-xs font-bold text-gray-700 dark:text-gray-200">{lastUpdateLabel ?? "—"}</p>
+            </div>
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
         <div className={`xl:col-span-8 ${cardClass}`}>
@@ -1069,7 +1114,7 @@ export default function PainelCombustivelClient() {
             <h3 className={panelTitleClass}>{`Tipo de Combust\u00edvel`}</h3>
             {renderChartActions("pie")}
           </div>
-          <div id="chart-panel-pie" className="h-[320px]">
+          <div id="chart-panel-pie" className="h-80">
             {hasPieData ? (
               <Chart key={tipoPieKey} type="pie" options={pieOptions} series={tipoPie.series} height="100%" />
             ) : (
@@ -1150,7 +1195,7 @@ export default function PainelCombustivelClient() {
       </div>
 
       {highlightedChart ? (
-        <div className="fixed inset-0 z-[120000] flex items-center justify-center p-3 sm:p-5">
+        <div className="fixed inset-0 z-120000 flex items-center justify-center p-3 sm:p-5">
           <button
             type="button"
             aria-label="Fechar visualização ampliada"
