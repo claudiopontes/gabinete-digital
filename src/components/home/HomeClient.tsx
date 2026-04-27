@@ -20,6 +20,7 @@ export default function HomeClient() {
             width={256}
             height={128}
             className="object-contain"
+            style={{ width: "256px", height: "auto" }}
             priority
             unoptimized
           />
