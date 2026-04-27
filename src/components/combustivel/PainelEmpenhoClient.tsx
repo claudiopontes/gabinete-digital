@@ -125,6 +125,7 @@ export default function PainelEmpenhoClient() {
 
         if (!active) return;
         setRows(out);
+
         try {
           const { data: updateData } = await updatePromise;
           const raw = (updateData?.[0] as { dt_carga_etl?: string } | undefined)?.dt_carga_etl;
@@ -138,6 +139,7 @@ export default function PainelEmpenhoClient() {
         } catch {
           setLastUpdateLabel(null);
         }
+
         setLoading(false);
       } catch (err) {
         if (!active) return;
@@ -147,7 +149,9 @@ export default function PainelEmpenhoClient() {
     }
 
     load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Opções de filtro
@@ -155,14 +159,17 @@ export default function PainelEmpenhoClient() {
     () => [...new Set(rows.map((r) => r.tipo_combustivel))].sort((a, b) => a.localeCompare(b, "pt-BR")),
     [rows],
   );
+
   const availableCredores = useMemo(
     () => [...new Set(rows.map((r) => r.nome_credor).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")),
     [rows],
   );
+
   const availableFormas = useMemo(
     () => [...new Set(rows.map((r) => r.forma_fornecimento).filter(Boolean))].sort(),
     [rows],
   );
+
   const availableEntidades = useMemo(
     () => [...new Set(rows.map((r) => r.entidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")),
     [rows],
@@ -171,21 +178,26 @@ export default function PainelEmpenhoClient() {
   // Linhas filtradas
   const filteredRows = useMemo(() => {
     let r = rows;
+
     if (selectedEntidade !== "all") {
       const norm = normalizeName(selectedEntidade);
       r = r.filter((row) => normalizeName(row.entidade) === norm);
     }
+
     if (selectedTipos.length > 0) {
       const set = new Set(selectedTipos);
       r = r.filter((row) => set.has(row.tipo_combustivel));
     }
+
     if (selectedCredor !== "all") {
       const norm = normalizeName(selectedCredor);
       r = r.filter((row) => normalizeName(row.nome_credor) === norm);
     }
+
     if (selectedForma !== "all") {
       r = r.filter((row) => row.forma_fornecimento === selectedForma);
     }
+
     return r;
   }, [rows, selectedEntidade, selectedTipos, selectedCredor, selectedForma]);
 
@@ -194,16 +206,19 @@ export default function PainelEmpenhoClient() {
     () => filteredRows.reduce((s, r) => s + (r.valor_empenho ?? 0), 0),
     [filteredRows],
   );
+
   const totalLiquidado = useMemo(
     () => filteredRows.reduce((s, r) => s + (r.valor_liquidado ?? 0), 0),
     [filteredRows],
   );
+
   const pctExecutado = totalEmpenhado > 0 ? (totalLiquidado / totalEmpenhado) * 100 : 0;
   const qtdEmpenhos = filteredRows.length;
 
   // KPI variação MoM
   const kpiVariation = useMemo(() => {
     const byMonth = new Map<string, { emp: number; liq: number; qtd: number }>();
+
     for (const r of filteredRows) {
       const key = monthKey(r.data_empenho);
       const cur = byMonth.get(key) ?? { emp: 0, liq: 0, qtd: 0 };
@@ -212,21 +227,26 @@ export default function PainelEmpenhoClient() {
       cur.qtd += 1;
       byMonth.set(key, cur);
     }
+
     const keys = [...byMonth.keys()].sort();
     if (keys.length < 2) return null;
+
     const lastKey = keys[keys.length - 1]!;
     const prevKey = keys[keys.length - 2]!;
     const last = byMonth.get(lastKey)!;
     const prev = byMonth.get(prevKey)!;
+
     const deltaEmp = prev.emp > 0 ? ((last.emp - prev.emp) / prev.emp) * 100 : 0;
     const deltaLiq = prev.liq > 0 ? ((last.liq - prev.liq) / prev.liq) * 100 : 0;
     const deltaQtd = prev.qtd > 0 ? ((last.qtd - prev.qtd) / prev.qtd) * 100 : 0;
+
     return { deltaEmp, deltaLiq, deltaQtd };
   }, [filteredRows]);
 
   // Série mensal (linha)
   const monthlySeries = useMemo(() => {
     const byMonth = new Map<string, { emp: number; liq: number }>();
+
     for (const r of filteredRows) {
       const key = monthKey(r.data_empenho);
       const cur = byMonth.get(key) ?? { emp: 0, liq: 0 };
@@ -234,7 +254,9 @@ export default function PainelEmpenhoClient() {
       cur.liq += r.valor_liquidado ?? 0;
       byMonth.set(key, cur);
     }
+
     const keys = [...byMonth.keys()].sort();
+
     return {
       categories: keys.map(toMonthLabel),
       empenhado: keys.map((k) => +(byMonth.get(k)!.emp.toFixed(2))),
@@ -245,9 +267,11 @@ export default function PainelEmpenhoClient() {
   // Treemap entidades
   const entidadeTreemap = useMemo(() => {
     const map = new Map<string, number>();
+
     for (const r of filteredRows) {
       map.set(r.entidade, (map.get(r.entidade) ?? 0) + (r.valor_empenho ?? 0));
     }
+
     return [...map.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30)
@@ -257,29 +281,35 @@ export default function PainelEmpenhoClient() {
   // Pizza tipo combustível
   const tipoPie = useMemo(() => {
     const map = new Map<string, number>();
+
     for (const r of filteredRows) {
       map.set(r.tipo_combustivel, (map.get(r.tipo_combustivel) ?? 0) + (r.valor_empenho ?? 0));
     }
+
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [filteredRows]);
 
   // Donut forma fornecimento
   const formaDonut = useMemo(() => {
     const map = new Map<string, number>();
+
     for (const r of filteredRows) {
       map.set(r.forma_fornecimento, (map.get(r.forma_fornecimento) ?? 0) + (r.valor_empenho ?? 0));
     }
+
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [filteredRows]);
 
   // TOP credores (barras)
   const credorBar = useMemo(() => {
     const map = new Map<string, number>();
+
     for (const r of filteredRows) {
       if (r.nome_credor) {
         map.set(r.nome_credor, (map.get(r.nome_credor) ?? 0) + (r.valor_empenho ?? 0));
       }
     }
+
     return [...map.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 12)
@@ -291,6 +321,7 @@ export default function PainelEmpenhoClient() {
     const sorted = [...credorBar].sort((a, b) => b.value - a.value).slice(0, 15);
     const total = sorted.reduce((s, r) => s + r.value, 0);
     let acc = 0;
+
     return sorted.map((item) => {
       acc += item.value;
       return { name: item.name, value: item.value, acumulado: +((acc / total) * 100).toFixed(1) };
@@ -300,6 +331,7 @@ export default function PainelEmpenhoClient() {
   // Helpers de filtro via URL
   function setFilter(key: string, value: string | string[]) {
     const params = new URLSearchParams(searchParams.toString());
+
     if (Array.isArray(value)) {
       params.delete(key);
       value.forEach((v) => params.append(key, v));
@@ -307,6 +339,7 @@ export default function PainelEmpenhoClient() {
       if (value === "all") params.delete(key);
       else params.set(key, value);
     }
+
     router.replace(`/painel-combustivel-empenhos?${params.toString()}`, { scroll: false });
   }
 
@@ -343,6 +376,7 @@ export default function PainelEmpenhoClient() {
     theme: { mode: "light" },
     grid: { borderColor: "#f1f5f9" },
   };
+
   const lineSeries = [
     { name: "Empenhado", data: monthlySeries.empenhado },
     { name: "Liquidado", data: monthlySeries.liquidado },
@@ -368,6 +402,7 @@ export default function PainelEmpenhoClient() {
     tooltip: { y: { formatter: (v) => formatMoney(v) } },
     theme: { mode: "light" },
   };
+
   const treemapSeries = [{ data: entidadeTreemap }];
 
   // ApexCharts: Pizza tipo
@@ -379,6 +414,7 @@ export default function PainelEmpenhoClient() {
     tooltip: { y: { formatter: (v) => formatMoney(v) } },
     theme: { mode: "light" },
   };
+
   const pieSeries = tipoPie.map(([, v]) => v);
 
   // ApexCharts: Donut forma fornecimento
@@ -391,6 +427,7 @@ export default function PainelEmpenhoClient() {
     plotOptions: { pie: { donut: { size: "65%" } } },
     theme: { mode: "light" },
   };
+
   const donutSeries = formaDonut.map(([, v]) => v);
 
   // ApexCharts: Barras credores
@@ -404,6 +441,7 @@ export default function PainelEmpenhoClient() {
     theme: { mode: "light" },
     grid: { borderColor: "#f1f5f9" },
   };
+
   const credorBarSeries = [
     { name: "Empenhado", data: credorBar.map((r) => ({ x: r.name, y: r.value })) },
   ];
@@ -436,6 +474,7 @@ export default function PainelEmpenhoClient() {
     theme: { mode: "light" },
     grid: { borderColor: "#f1f5f9" },
   };
+
   const paretoSeries = [
     { name: "Empenhado", type: "column", data: credorPareto.map((r) => r.value) },
     { name: "Acumulado %", type: "line", data: credorPareto.map((r) => r.acumulado) },
@@ -459,50 +498,50 @@ export default function PainelEmpenhoClient() {
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 overflow-x-hidden pb-2 space-y-3">
+    <div className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden pb-2">
       {/* Filtros inline (mobile) */}
       <div className="min-w-0 lg:hidden">
         <div className="overflow-x-auto pb-1">
           <div className="flex min-w-max items-center gap-2">
-        <FilterPill
-          label="Entidade"
-          value={selectedEntidade}
-          options={availableEntidades}
-          onSelect={(v) => setFilter("entidade", v)}
-        />
-        <FilterPill
-          label="Tipo"
-          value={selectedTipos[0] ?? "all"}
-          options={availableTipos}
-          onSelect={(v) => setFilter("tipo", v === "all" ? [] : [v])}
-        />
-        <FilterPill
-          label="Credor"
-          value={selectedCredor}
-          options={availableCredores}
-          onSelect={(v) => setFilter("credor", v)}
-        />
-        <FilterPill
-          label="Fornecimento"
-          value={selectedForma}
-          options={availableFormas}
-          onSelect={(v) => setFilter("forma", v)}
-        />
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
-          >
-            Limpar filtros
-          </button>
-        )}
+            <FilterPill
+              label="Entidade"
+              value={selectedEntidade}
+              options={availableEntidades}
+              onSelect={(v) => setFilter("entidade", v)}
+            />
+            <FilterPill
+              label="Tipo"
+              value={selectedTipos[0] ?? "all"}
+              options={availableTipos}
+              onSelect={(v) => setFilter("tipo", v === "all" ? [] : [v])}
+            />
+            <FilterPill
+              label="Credor"
+              value={selectedCredor}
+              options={availableCredores}
+              onSelect={(v) => setFilter("credor", v)}
+            />
+            <FilterPill
+              label="Fornecimento"
+              value={selectedForma}
+              options={availableFormas}
+              onSelect={(v) => setFilter("forma", v)}
+            />
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+              >
+                Limpar filtros
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Linha superior: KPIs + metadados/acoes */}
-      <div className="flex w-full min-w-0 flex-col gap-3 xl:flex-row xl:items-stretch xl:justify-between">
-        <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Linha superior: KPIs + metadados/ações */}
+      <div className="grid w-full min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px] xl:items-stretch">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title="Valor Empenhado"
             value={formatMoney(totalEmpenhado)}
@@ -529,35 +568,48 @@ export default function PainelEmpenhoClient() {
           />
         </div>
 
-        <div className="xl:w-[140px]">
-          <div className="flex w-full flex-col gap-1">
+        <div className="min-w-0">
+          <div className="flex h-full w-full flex-col gap-2">
             <Link
               href="/painel-combustivel"
-              className="group relative flex w-full items-center justify-center gap-1 overflow-hidden rounded-xl border border-orange-300 bg-gradient-to-r from-orange-500 to-amber-500 px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.01em] text-white shadow-md shadow-orange-300/40 transition hover:from-orange-600 hover:to-amber-600 hover:shadow-lg hover:shadow-orange-300/50 dark:border-orange-700 dark:from-orange-700 dark:to-amber-700 dark:shadow-none"
+              className="group relative inline-flex h-9 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-orange-300 bg-gradient-to-r from-orange-500 to-amber-500 px-3 text-[11px] font-extrabold uppercase tracking-[0.02em] text-white shadow-md shadow-orange-300/40 transition hover:from-orange-600 hover:to-amber-600 hover:shadow-lg hover:shadow-orange-300/50 dark:border-orange-700 dark:from-orange-700 dark:to-amber-700 dark:shadow-none"
             >
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.3),transparent_40%)] opacity-90 transition group-hover:opacity-100" />
-              <svg className="relative" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+
+              <svg
+                className="relative h-3.5 w-3.5 shrink-0"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M10 7 5 12l5 5" />
                 <path d="M5 12h10a4 4 0 1 1 0 8h-1" />
               </svg>
+
               <span className="relative">Notas Fiscais</span>
             </Link>
 
-            <div className="w-full rounded-xl border border-sky-200 bg-[#d9e1e7] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-sky-800/60 dark:bg-slate-900/30">
+            <div className="flex min-h-[84px] flex-1 flex-col justify-center rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-2.5 shadow-sm shadow-sky-100/70 ring-1 ring-white/60 dark:border-sky-800/60 dark:bg-slate-900/30 dark:shadow-none dark:ring-sky-900/20">
               <div>
-                <p className="text-[7px] font-semibold uppercase tracking-[0.1em] text-sky-600 dark:text-sky-400">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">
                   FONTE DOS DADOS
                 </p>
-                <p className="mt-0.5 text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">
+                <p className="mt-0.5 text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">
                   Empenhos SIPAC
                 </p>
               </div>
-              <div className="my-1 h-px w-full bg-sky-200 dark:bg-sky-800/60" />
+
+              <div className="my-2 h-px w-full bg-sky-200/90 dark:bg-sky-800/60" />
+
               <div>
-                <p className="text-[7px] font-semibold uppercase tracking-[0.1em] text-sky-600 dark:text-sky-400">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-400">
                   ÚLTIMA ATUALIZAÇÃO
                 </p>
-                <p className="mt-0.5 text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">
+                <p className="mt-0.5 text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">
                   {lastUpdateLabel ?? "—"}
                 </p>
               </div>
@@ -696,6 +748,7 @@ function KpiCard({
     green: "border-green-100 bg-green-50 dark:border-green-900/30 dark:bg-green-900/10",
     purple: "border-purple-100 bg-purple-50 dark:border-purple-900/30 dark:bg-purple-900/10",
   };
+
   const textPalette = {
     orange: "text-orange-700 dark:text-orange-300",
     blue: "text-blue-700 dark:text-blue-300",
@@ -709,7 +762,9 @@ function KpiCard({
       <p className={`mt-1 text-lg font-bold leading-tight ${textPalette[color]}`}>{value}</p>
       {delta !== null && (
         <p
-          className={`mt-0.5 text-xs font-medium ${delta >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}
+          className={`mt-0.5 text-xs font-medium ${
+            delta >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+          }`}
         >
           {delta >= 0 ? "▲" : "▼"} {formatDeltaPercent(delta)} vs mês anterior
         </p>
