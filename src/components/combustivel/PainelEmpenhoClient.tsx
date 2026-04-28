@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/preserve-manual-memoization */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -187,7 +186,7 @@ export default function PainelEmpenhoClient() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
   const availableTipos = useMemo(
     () => [...new Set(rows.map((r) => r.tipo_combustivel))].sort((a, b) => a.localeCompare(b, "pt-BR")),
@@ -565,6 +564,51 @@ export default function PainelEmpenhoClient() {
     { name: "Acumulado %", type: "line", data: credorPareto.map((r) => r.acumulado) },
   ];
 
+  const chartMeta: Record<ChartKey, { title: string; containerId: string }> = {
+    line: { title: "Evolução Mensal — Empenhado vs Liquidado", containerId: "chart-panel-line" },
+    treemap: { title: "Valor Empenhado por Entidade", containerId: "chart-panel-treemap" },
+    pie: { title: "Distribuição por Tipo de Combustível", containerId: "chart-panel-pie" },
+    donut: { title: "Forma de Fornecimento", containerId: "chart-panel-donut" },
+    credorBar: { title: "TOP Credores / Fornecedores", containerId: "chart-panel-credor-bar" },
+    pareto: { title: "Pareto — Credores (80/20)", containerId: "chart-panel-pareto" },
+  };
+
+  const closeActionsMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const details = event.currentTarget.closest("details");
+    details?.removeAttribute("open");
+  };
+
+  const printChart = (chart: ChartKey) => {
+    const meta = chartMeta[chart];
+    const target = document.getElementById(meta.containerId);
+    if (!target) return;
+
+    const chartCanvas = target.querySelector(".apexcharts-canvas");
+    const content = chartCanvas ? chartCanvas.outerHTML : target.innerHTML;
+    const printWindow = window.open("", "_blank", "width=1200,height=860");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${meta.title}</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+            h1 { margin: 0 0 16px; font-size: 20px; font-weight: 700; }
+            .chart-wrap { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; }
+          </style>
+        </head>
+        <body>
+          <h1>${meta.title}</h1>
+          <div class="chart-wrap">${content}</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-16 text-gray-400">
@@ -652,12 +696,12 @@ export default function PainelEmpenhoClient() {
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title="Valor Empenhado"
-            value={formatMoney(totalEmpenhado)}
+            value={`R$ ${formatMillions(totalEmpenhado)}`}
             delta={kpiVariation?.deltaEmp ?? null}
           />
           <KpiCard
             title="Valor Liquidado"
-            value={formatMoney(totalLiquidado)}
+            value={`R$ ${formatMillions(totalLiquidado)}`}
             delta={kpiVariation?.deltaLiq ?? null}
           />
           <KpiCard
@@ -725,12 +769,17 @@ export default function PainelEmpenhoClient() {
       {/* Linha: evolução mensal */}
       <ChartCard
         title="Evolução Mensal — Empenhado vs Liquidado"
-        chartKey="line"
-        highlighted={highlightedChart}
-        onHighlight={setHighlightedChart}
         className={highlightClass("line")}
+        actions={
+          <ChartActions
+            onView={() => setHighlightedChart("line")}
+            onPrint={printChart}
+            chartKey="line"
+            onCloseMenu={closeActionsMenu}
+          />
+        }
       >
-        <div className="-mx-1 overflow-x-auto px-1">
+        <div id="chart-panel-line" className="-mx-1 overflow-x-auto px-1">
           <div className="min-w-[760px]">
             <Chart options={lineOptions} series={lineSeries} type="line" height={270} width="100%" />
           </div>
@@ -741,12 +790,17 @@ export default function PainelEmpenhoClient() {
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Valor Empenhado por Entidade"
-          chartKey="treemap"
-          highlighted={highlightedChart}
-          onHighlight={setHighlightedChart}
           className={highlightClass("treemap")}
+          actions={
+            <ChartActions
+              onView={() => setHighlightedChart("treemap")}
+              onPrint={printChart}
+              chartKey="treemap"
+              onCloseMenu={closeActionsMenu}
+            />
+          }
         >
-          <div className="overflow-x-auto">
+          <div id="chart-panel-treemap" className="overflow-x-auto">
             <div className="min-w-[440px]">
               <Chart options={treemapOptions} series={treemapSeries} type="treemap" height={270} width="100%" />
             </div>
@@ -755,13 +809,18 @@ export default function PainelEmpenhoClient() {
 
         <ChartCard
           title="Distribuição por Tipo de Combustível"
-          chartKey="pie"
-          highlighted={highlightedChart}
-          onHighlight={setHighlightedChart}
           className={highlightClass("pie")}
+          actions={
+            <ChartActions
+              onView={() => setHighlightedChart("pie")}
+              onPrint={printChart}
+              chartKey="pie"
+              onCloseMenu={closeActionsMenu}
+            />
+          }
         >
           {pieSeries.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div id="chart-panel-pie" className="overflow-x-auto">
               <div className="min-w-[340px]">
                 <Chart options={pieOptions} series={pieSeries} type="pie" height={270} width="100%" />
               </div>
@@ -776,13 +835,18 @@ export default function PainelEmpenhoClient() {
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Forma de Fornecimento"
-          chartKey="donut"
-          highlighted={highlightedChart}
-          onHighlight={setHighlightedChart}
           className={highlightClass("donut")}
+          actions={
+            <ChartActions
+              onView={() => setHighlightedChart("donut")}
+              onPrint={printChart}
+              chartKey="donut"
+              onCloseMenu={closeActionsMenu}
+            />
+          }
         >
           {donutSeries.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div id="chart-panel-donut" className="overflow-x-auto">
               <div className="min-w-[340px]">
                 <Chart options={donutOptions} series={donutSeries} type="donut" height={270} width="100%" />
               </div>
@@ -794,13 +858,18 @@ export default function PainelEmpenhoClient() {
 
         <ChartCard
           title="TOP Credores / Fornecedores"
-          chartKey="credorBar"
-          highlighted={highlightedChart}
-          onHighlight={setHighlightedChart}
           className={highlightClass("credorBar")}
+          actions={
+            <ChartActions
+              onView={() => setHighlightedChart("credorBar")}
+              onPrint={printChart}
+              chartKey="credorBar"
+              onCloseMenu={closeActionsMenu}
+            />
+          }
         >
           {credorBar.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div id="chart-panel-credor-bar" className="overflow-x-auto">
               <div className="min-w-[500px]">
                 <Chart options={credorBarOptions} series={credorBarSeries} type="bar" height={270} width="100%" />
               </div>
@@ -814,13 +883,18 @@ export default function PainelEmpenhoClient() {
       {/* Pareto */}
       <ChartCard
         title="Pareto — Credores (80/20)"
-        chartKey="pareto"
-        highlighted={highlightedChart}
-        onHighlight={setHighlightedChart}
         className={highlightClass("pareto")}
+        actions={
+          <ChartActions
+            onView={() => setHighlightedChart("pareto")}
+            onPrint={printChart}
+            chartKey="pareto"
+            onCloseMenu={closeActionsMenu}
+          />
+        }
       >
         {credorPareto.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div id="chart-panel-pareto" className="overflow-x-auto">
             <div className="min-w-[620px]">
               <Chart options={paretoOptions} series={paretoSeries} type="bar" height={290} width="100%" />
             </div>
@@ -829,6 +903,30 @@ export default function PainelEmpenhoClient() {
           <Empty />
         )}
       </ChartCard>
+      {highlightedChart ? (
+        <div className="fixed inset-0 z-120000 flex items-center justify-center p-3 sm:p-5">
+          <button
+            type="button"
+            aria-label="Fechar visualização ampliada"
+            className="absolute inset-0 bg-gray-900/70 backdrop-blur-[1px]"
+            onClick={() => setHighlightedChart(null)}
+          />
+          <div className="relative z-10 flex h-[95vh] w-[98vw] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-900 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100">{chartMeta[highlightedChart].title}</h3>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => printChart(highlightedChart)} className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Imprimir</button>
+                <button type="button" onClick={() => setHighlightedChart(null)} className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600">Fechar</button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700 sm:p-3">
+              <div className="h-full min-w-[760px]">
+                <ChartCardContent chartKey={highlightedChart} lineOptions={lineOptions} lineSeries={lineSeries} treemapOptions={treemapOptions} treemapSeries={treemapSeries} pieOptions={pieOptions} pieSeries={pieSeries} donutOptions={donutOptions} donutSeries={donutSeries} credorBarOptions={credorBarOptions} credorBarSeries={credorBarSeries} paretoOptions={paretoOptions} paretoSeries={paretoSeries} />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -876,29 +974,72 @@ function KpiCard({
 
 function ChartCard({
   title,
-  chartKey,
-  highlighted,
-  onHighlight,
   children,
   className = "",
+  actions,
 }: {
   title: string;
-  chartKey: ChartKey;
-  highlighted: ChartKey | null;
-  onHighlight: (key: ChartKey | null) => void;
   children: React.ReactNode;
   className?: string;
+  actions?: React.ReactNode;
 }) {
   return (
     <div
       className={`min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-3.5 transition-all dark:border-gray-700 dark:bg-gray-900 ${className}`}
-      onMouseEnter={() => onHighlight(chartKey)}
-      onMouseLeave={() => onHighlight(null)}
     >
-      <h3 className="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</h3>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</h3>
+        {actions}
+      </div>
       {children}
     </div>
   );
+}
+
+function ChartActions({
+  onView,
+  onPrint,
+  chartKey,
+  onCloseMenu,
+}: {
+  onView: () => void;
+  onPrint: (key: ChartKey) => void;
+  chartKey: ChartKey;
+  onCloseMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <details className="relative">
+      <summary className="inline-flex list-none cursor-pointer select-none items-center rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700">Ações</summary>
+      <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+        <button type="button" className="w-full rounded-md px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700" onClick={(event) => { onCloseMenu(event); onView(); }}>Visualizar</button>
+        <button type="button" className="w-full rounded-md px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700" onClick={(event) => { onCloseMenu(event); onPrint(chartKey); }}>Imprimir</button>
+      </div>
+    </details>
+  );
+}
+
+function ChartCardContent(props: {
+  chartKey: ChartKey;
+  lineOptions: ApexOptions;
+  lineSeries: { name: string; data: number[] }[];
+  treemapOptions: ApexOptions;
+  treemapSeries: { data: { x: string; y: number }[] }[];
+  pieOptions: ApexOptions;
+  pieSeries: number[];
+  donutOptions: ApexOptions;
+  donutSeries: number[];
+  credorBarOptions: ApexOptions;
+  credorBarSeries: { name: string; data: { x: string; y: number }[] }[];
+  paretoOptions: ApexOptions;
+  paretoSeries: { name: string; type: "column" | "line"; data: number[] }[];
+}) {
+  const { chartKey } = props;
+  if (chartKey === "line") return <Chart options={props.lineOptions} series={props.lineSeries} type="line" height={520} width="100%" />;
+  if (chartKey === "treemap") return <Chart options={props.treemapOptions} series={props.treemapSeries} type="treemap" height={520} width="100%" />;
+  if (chartKey === "pie") return props.pieSeries.length > 0 ? <Chart options={props.pieOptions} series={props.pieSeries} type="pie" height={520} width="100%" /> : <Empty />;
+  if (chartKey === "donut") return props.donutSeries.length > 0 ? <Chart options={props.donutOptions} series={props.donutSeries} type="donut" height={520} width="100%" /> : <Empty />;
+  if (chartKey === "credorBar") return props.credorBarSeries[0]?.data?.length > 0 ? <Chart options={props.credorBarOptions} series={props.credorBarSeries} type="bar" height={520} width="100%" /> : <Empty />;
+  return props.paretoSeries[0]?.data?.length > 0 ? <Chart options={props.paretoOptions} series={props.paretoSeries} type="bar" height={520} width="100%" /> : <Empty />;
 }
 
 function FilterPill({
