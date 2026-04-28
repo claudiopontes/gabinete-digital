@@ -112,6 +112,8 @@ export default function PainelEmpenhoClient() {
   const selectedTipos = searchParams.getAll("tipo").filter((t) => t.length > 0);
   const selectedCredor = searchParams.get("credor") ?? "all";
   const selectedForma = searchParams.get("forma") ?? "all";
+  const selectedAnoInicio = searchParams.get("anoInicio") ?? "";
+  const selectedAnoFim = searchParams.get("anoFim") ?? "";
 
   useEffect(() => {
     let active = true;
@@ -161,6 +163,16 @@ export default function PainelEmpenhoClient() {
 
         setLastUpdateLabel(formatDateBR(mostRecentDate));
 
+        // Auto-seleciona os últimos 2 anos se nenhum filtro de ano estiver definido
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get("anoInicio") && !params.get("anoFim")) {
+          const anos = [...new Set(out.map((r) => r.ano_empenho))].sort((a, b) => a - b);
+          const maxAno = anos.at(-1) ?? new Date().getFullYear();
+          params.set("anoInicio", String(maxAno - 1));
+          params.set("anoFim", String(maxAno));
+          router.replace(`/painel-combustivel-empenhos?${params.toString()}`, { scroll: false });
+        }
+
         setLoading(false);
       } catch (err) {
         if (!active) return;
@@ -197,6 +209,11 @@ export default function PainelEmpenhoClient() {
     [rows],
   );
 
+  const availableYears = useMemo(
+    () => [...new Set(rows.map((r) => r.ano_empenho))].filter(Boolean).sort((a, b) => a - b),
+    [rows],
+  );
+
   const filteredRows = useMemo(() => {
     let r = rows;
 
@@ -219,8 +236,18 @@ export default function PainelEmpenhoClient() {
       r = r.filter((row) => row.forma_fornecimento === selectedForma);
     }
 
+    if (selectedAnoInicio) {
+      const inicio = parseInt(selectedAnoInicio, 10);
+      r = r.filter((row) => row.ano_empenho >= inicio);
+    }
+
+    if (selectedAnoFim) {
+      const fim = parseInt(selectedAnoFim, 10);
+      r = r.filter((row) => row.ano_empenho <= fim);
+    }
+
     return r;
-  }, [rows, selectedEntidade, selectedTipos, selectedCredor, selectedForma]);
+  }, [rows, selectedEntidade, selectedTipos, selectedCredor, selectedForma, selectedAnoInicio, selectedAnoFim]);
 
   const totalEmpenhado = useMemo(
     () => filteredRows.reduce((s, r) => s + (r.valor_empenho ?? 0), 0),
@@ -367,7 +394,11 @@ export default function PainelEmpenhoClient() {
   }
 
   function clearAllFilters() {
-    router.replace("/painel-combustivel-empenhos", { scroll: false });
+    const maxAno = availableYears.at(-1) ?? new Date().getFullYear();
+    const params = new URLSearchParams();
+    params.set("anoInicio", String(maxAno - 1));
+    params.set("anoFim", String(maxAno));
+    router.replace(`/painel-combustivel-empenhos?${params.toString()}`, { scroll: false });
   }
 
   const hasActiveFilters =
@@ -461,6 +492,11 @@ export default function PainelEmpenhoClient() {
     chart: { type: "bar", toolbar: { show: false }, background: "transparent" },
     plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
     colors: ["#f97316"],
+    dataLabels: {
+      enabled: true,
+      formatter: (v) => formatMillions(Number(v)),
+      style: { fontSize: "10px" },
+    },
     xaxis: {
       labels: {
         formatter: (v) => formatMillions(Number(v)),
@@ -483,12 +519,13 @@ export default function PainelEmpenhoClient() {
   const paretoOptions: ApexOptions = {
     chart: { type: "bar", toolbar: { show: false }, background: "transparent" },
     plotOptions: { bar: { borderRadius: 4 } },
-    colors: ["#f97316"],
+    colors: ["#f97316", "#3b82f6"],
     stroke: { width: [0, 2], colors: ["transparent", "#3b82f6"] },
     xaxis: {
       categories: credorPareto.map((r) => r.name),
       labels: { rotate: -35, style: { fontSize: "10px" } },
     },
+    dataLabels: { enabled: false },
     yaxis: [
       {
         labels: {
@@ -501,7 +538,8 @@ export default function PainelEmpenhoClient() {
         min: 0,
         max: 100,
         labels: {
-          formatter: (v) => `${v.toFixed(0)}%`,
+          formatter: (v) =>
+            `${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`,
           style: { fontSize: "10px" },
         },
       },
@@ -511,7 +549,10 @@ export default function PainelEmpenhoClient() {
       intersect: false,
       y: [
         { formatter: (v) => formatMoney(v) },
-        { formatter: (v) => `${v.toFixed(1)}%` },
+        {
+          formatter: (v) =>
+            `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+        },
       ],
     },
     legend: { position: "top" },
@@ -570,6 +611,30 @@ export default function PainelEmpenhoClient() {
               options={availableFormas}
               onSelect={(v) => setFilter("forma", v)}
             />
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="text-xs text-gray-500">Ano:</span>
+              <select
+                value={selectedAnoInicio}
+                onChange={(e) => setFilter("anoInicio", e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+              >
+                <option value="">Todos</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <span className="text-xs text-gray-500">a</span>
+              <select
+                value={selectedAnoFim}
+                onChange={(e) => setFilter("anoFim", e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+              >
+                <option value="">Todos</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
@@ -589,27 +654,21 @@ export default function PainelEmpenhoClient() {
             title="Valor Empenhado"
             value={formatMoney(totalEmpenhado)}
             delta={kpiVariation?.deltaEmp ?? null}
-            color="orange"
           />
           <KpiCard
             title="Valor Liquidado"
             value={formatMoney(totalLiquidado)}
             delta={kpiVariation?.deltaLiq ?? null}
-            color="blue"
           />
           <KpiCard
             title="Execução Orçamentária"
-            value={`${pctExecutado.toLocaleString("pt-BR", {
-              maximumFractionDigits: 1,
-            })}%`}
+            value={`${pctExecutado.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
             delta={null}
-            color="green"
           />
           <KpiCard
             title="Qtd. de Empenhos"
             value={qtdEmpenhos.toLocaleString("pt-BR")}
             delta={kpiVariation?.deltaQtd ?? null}
-            color="purple"
           />
         </div>
 
@@ -778,41 +837,39 @@ function KpiCard({
   title,
   value,
   delta,
-  color,
 }: {
   title: string;
   value: string;
   delta: number | null;
-  color: "orange" | "blue" | "green" | "purple";
 }) {
-  const palette = {
-    orange: "border-orange-100 bg-orange-50 dark:border-orange-900/30 dark:bg-orange-900/10",
-    blue: "border-blue-100 bg-blue-50 dark:border-blue-900/30 dark:bg-blue-900/10",
-    green: "border-green-100 bg-green-50 dark:border-green-900/30 dark:bg-green-900/10",
-    purple: "border-purple-100 bg-purple-50 dark:border-purple-900/30 dark:bg-purple-900/10",
-  };
+  const trendColor =
+    delta === null ? ""
+    : delta > 0.01 ? "text-emerald-600 dark:text-emerald-300"
+    : delta < -0.01 ? "text-red-600 dark:text-red-300"
+    : "text-blue-600 dark:text-blue-300";
 
-  const textPalette = {
-    orange: "text-orange-700 dark:text-orange-300",
-    blue: "text-blue-700 dark:text-blue-300",
-    green: "text-green-700 dark:text-green-300",
-    purple: "text-purple-700 dark:text-purple-300",
-  };
+  const trendArrow =
+    delta === null ? ""
+    : delta > 0.01 ? "↑"
+    : delta < -0.01 ? "↓"
+    : "→";
 
   return (
-    <div className={`min-w-0 rounded-xl border p-3.5 ${palette[color]}`}>
-      <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{title}</p>
-      <p className={`mt-1 text-base font-bold leading-tight ${textPalette[color]}`}>{value}</p>
-
-      {delta !== null && (
-        <p
-          className={`mt-0.5 text-[11px] font-medium ${
-            delta >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-          }`}
-        >
-          {delta >= 0 ? "▲" : "▼"} {formatDeltaPercent(delta)} vs mês anterior
-        </p>
-      )}
+    <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-1.5">
+        <h3 className="text-sm font-semibold tracking-tight text-gray-700 dark:text-gray-200">{title}</h3>
+      </div>
+      <div className="text-center">
+        <p className="text-[26px] font-semibold leading-tight text-[#1e3aaf] dark:text-blue-400">{value}</p>
+        {delta !== null && (
+          <p className={`mt-1 text-[17px] font-semibold ${trendColor}`}>
+            {trendArrow} {formatDeltaPercent(delta)}
+          </p>
+        )}
+        {delta !== null && (
+          <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">vs mês anterior</p>
+        )}
+      </div>
     </div>
   );
 }

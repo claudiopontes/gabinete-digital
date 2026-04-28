@@ -30,6 +30,13 @@ function normalizeText(value: string): string {
   return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
+function formatDateBR(value: string): string {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 function buildTitle(options: Option[], value: string, allLabel: string): string {
   if (value === "all") return allLabel;
   return options.find((item) => item.value === value)?.label ?? allLabel;
@@ -218,16 +225,20 @@ export default function EmpenhoHeaderFilters() {
   const [tipos, setTipos] = useState<string[]>([]);
   const [credores, setCredores] = useState<string[]>([]);
   const [formas, setFormas] = useState<string[]>([]);
+  const [anos, setAnos] = useState<number[]>([]);
 
   const [entidadeDialogOpen, setEntidadeDialogOpen] = useState(false);
   const [tipoDialogOpen, setTipoDialogOpen] = useState(false);
   const [credorDialogOpen, setCredorDialogOpen] = useState(false);
   const [formaDialogOpen, setFormaDialogOpen] = useState(false);
+  const [anoDialogOpen, setAnoDialogOpen] = useState(false);
 
   const selectedEntidade = searchParams.get("entidade") ?? "all";
   const selectedTipos = searchParams.getAll("tipo").filter((t) => t.length > 0);
   const selectedCredor = searchParams.get("credor") ?? "all";
   const selectedForma = searchParams.get("forma") ?? "all";
+  const selectedAnoInicio = searchParams.get("anoInicio") ?? "";
+  const selectedAnoFim = searchParams.get("anoFim") ?? "";
 
   useEffect(() => {
     let active = true;
@@ -249,11 +260,12 @@ export default function EmpenhoHeaderFilters() {
         const tipoSet = new Set<string>();
         const credorSet = new Set<string>();
         const formaSet = new Set<string>();
+        const anoSet = new Set<number>();
 
         while (true) {
           const { data, error } = await supabase
             .from("tb_despesa_combustivel_polanco")
-            .select("entidade, tipo_combustivel, nome_credor, forma_fornecimento")
+            .select("entidade, tipo_combustivel, nome_credor, forma_fornecimento, ano_empenho")
             .order("entidade", { ascending: true })
             .range(offset, offset + pageSize - 1);
 
@@ -263,6 +275,7 @@ export default function EmpenhoHeaderFilters() {
             tipo_combustivel: string;
             nome_credor: string;
             forma_fornecimento: string;
+            ano_empenho: number;
           }>;
 
           batch.forEach((row) => {
@@ -270,6 +283,7 @@ export default function EmpenhoHeaderFilters() {
             if (row.tipo_combustivel) tipoSet.add(row.tipo_combustivel);
             if (row.nome_credor) credorSet.add(row.nome_credor);
             if (row.forma_fornecimento) formaSet.add(row.forma_fornecimento);
+            if (row.ano_empenho) anoSet.add(row.ano_empenho);
           });
 
           if (batch.length < pageSize) break;
@@ -281,6 +295,7 @@ export default function EmpenhoHeaderFilters() {
         setTipos([...tipoSet].sort((a, b) => a.localeCompare(b, "pt-BR")));
         setCredores([...credorSet].sort((a, b) => a.localeCompare(b, "pt-BR")));
         setFormas([...formaSet].sort());
+        setAnos([...anoSet].sort((a, b) => a - b));
         setLoading(false);
       } catch (err) {
         if (!active) return;
@@ -314,6 +329,14 @@ export default function EmpenhoHeaderFilters() {
   const credorTitle = buildTitle(credorOptions, selectedCredor, "Todos");
   const formaTitle = buildTitle(formaOptions, selectedForma, "Todos");
 
+  const hasAnoFilter = !!selectedAnoInicio || !!selectedAnoFim;
+  const anoTitle = useMemo(() => {
+    if (!selectedAnoInicio && !selectedAnoFim) return "Todos";
+    if (selectedAnoInicio && selectedAnoFim) return `${selectedAnoInicio} a ${selectedAnoFim}`;
+    if (selectedAnoInicio) return `A partir de ${selectedAnoInicio}`;
+    return `Até ${selectedAnoFim}`;
+  }, [selectedAnoInicio, selectedAnoFim]);
+
   const hasActiveFilters =
     selectedEntidade !== "all" || selectedTipos.length > 0 || selectedCredor !== "all" || selectedForma !== "all";
   const activeFilterCount =
@@ -344,6 +367,16 @@ export default function EmpenhoHeaderFilters() {
         <button type="button" onClick={() => setFormaDialogOpen(true)} disabled={loading || Boolean(error)} className={btnClass} style={{ minWidth: 200 }}>
           <span className="mr-2 text-xs text-gray-500 dark:text-gray-400">Fornecimento:</span>
           <span className="inline-block max-w-[72%] truncate align-bottom font-medium">{formaTitle}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAnoDialogOpen(true)}
+          className={`${btnClass} ${hasAnoFilter ? "border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-900/10" : ""}`}
+          style={{ minWidth: 180 }}
+        >
+          <span className="mr-2 text-xs text-gray-500 dark:text-gray-400">Ano:</span>
+          <span className="inline-block max-w-[72%] truncate align-bottom font-medium">{anoTitle}</span>
         </button>
 
         {hasActiveFilters && (
@@ -386,6 +419,12 @@ export default function EmpenhoHeaderFilters() {
               <span className="font-semibold">x</span>
             </button>
           )}
+          {hasAnoFilter && (
+            <button type="button" onClick={() => replaceParams((p) => { p.delete("anoInicio"); p.delete("anoFim"); })} className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 dark:border-orange-700/50 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/30">
+              <span>Ano: {anoTitle}</span>
+              <span className="font-semibold">x</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -393,6 +432,110 @@ export default function EmpenhoHeaderFilters() {
       <MultiFilterDialog title="Selecionar Tipos de Combustível" isOpen={tipoDialogOpen} options={tipoOptions} selectedValues={selectedTipos} onClose={() => setTipoDialogOpen(false)} onApply={(values) => replaceParams((p) => { p.delete("tipo"); values.forEach((v) => p.append("tipo", v)); })} />
       <SingleFilterDialog title="Selecionar Credor" isOpen={credorDialogOpen} options={credorOptions} selectedValue={selectedCredor} allLabel="Todos" onClose={() => setCredorDialogOpen(false)} onSelect={(v) => replaceParams((p) => { if (v === "all") p.delete("credor"); else p.set("credor", v); })} />
       <SingleFilterDialog title="Selecionar Forma de Fornecimento" isOpen={formaDialogOpen} options={formaOptions} selectedValue={selectedForma} allLabel="Todos" onClose={() => setFormaDialogOpen(false)} onSelect={(v) => replaceParams((p) => { if (v === "all") p.delete("forma"); else p.set("forma", v); })} />
+      <AnoFiltroDialog
+        isOpen={anoDialogOpen}
+        anos={anos}
+        anoInicio={selectedAnoInicio}
+        anoFim={selectedAnoFim}
+        onClose={() => setAnoDialogOpen(false)}
+        onApply={(inicio, fim) =>
+          replaceParams((p) => {
+            if (inicio) p.set("anoInicio", inicio); else p.delete("anoInicio");
+            if (fim) p.set("anoFim", fim); else p.delete("anoFim");
+          })
+        }
+      />
     </>
+  );
+}
+
+function AnoFiltroDialog({
+  isOpen,
+  anos,
+  anoInicio,
+  anoFim,
+  onClose,
+  onApply,
+}: {
+  isOpen: boolean;
+  anos: number[];
+  anoInicio: string;
+  anoFim: string;
+  onClose: () => void;
+  onApply: (inicio: string, fim: string) => void;
+}) {
+  const [inicio, setInicio] = useState(anoInicio);
+  const [fim, setFim] = useState(anoFim);
+
+  useEffect(() => {
+    if (isOpen) {
+      setInicio(anoInicio);
+      setFim(anoFim);
+    }
+  }, [isOpen, anoInicio, anoFim]);
+
+  const selectClass =
+    "h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-700 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90";
+
+  return (
+    <DialogShell
+      title="Filtrar por Ano"
+      isOpen={isOpen}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => { onApply("", ""); onClose(); }}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Limpar
+          </button>
+          <button
+            type="button"
+            onClick={() => { onApply(inicio, fim); onClose(); }}
+            className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600"
+          >
+            Aplicar
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Ano inicial
+          </label>
+          <select
+            value={inicio}
+            onChange={(e) => setInicio(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos</option>
+            {anos.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Ano final
+          </label>
+          <select
+            value={fim}
+            onChange={(e) => setFim(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos</option>
+            {anos.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        {inicio && fim && Number(inicio) > Number(fim) && (
+          <p className="text-xs text-red-500">O ano inicial não pode ser maior que o ano final.</p>
+        )}
+      </div>
+    </DialogShell>
   );
 }
