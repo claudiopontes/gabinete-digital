@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useEffect, useRef, useState,useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -201,7 +201,7 @@ const AppSidebar: React.FC = () => {
     setOpenSubmenu(getSubmenuFromPath(pathname));
   }, [pathname]);
 
-  // Atualiza a altura do submenu quando ele é aberto
+  // Atualiza a altura do submenu quando ele Ã© aberto
   useEffect(() => {
     if (openSubmenu !== null) {
       const key = `${openSubmenu.type}-${openSubmenu.index}`;
@@ -303,3 +303,4 @@ const AppSidebar: React.FC = () => {
 };
 
 export default AppSidebar;
+

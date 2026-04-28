@@ -10,6 +10,8 @@ import { executarCargaDimensoesCsv } from "./jobs/dimensoes-csv";
 import { executarCargaApcCombustivelPolanco } from "./jobs/apc-combustivel-polanco";
 import { executarSyncApcPolancoSupabase } from "./jobs/apc-polanco-sync-supabase";
 import { executarETLReceitaPublica } from "./jobs/receita-publica";
+import { executarCargaDimensoesReceitaSqlServer } from "./jobs/dimensoes-receita-sqlserver";
+import { executarCargaDimensoesEnteEntidadeSqlServer } from "./jobs/dimensoes-ente-entidade-sqlserver";
 
 const TIMEZONE = process.env.ETL_TIMEZONE || "America/Rio_Branco";
 const FACT_ETL_CRON = process.env.FACT_ETL_CRON || "0 1 * * *"; // 01:00 daily
@@ -18,6 +20,10 @@ const RUN_APC_POLANCO_NIGHTLY = (process.env.RUN_APC_POLANCO_NIGHTLY ?? "true").
 const RUN_APC_POLANCO_SUPABASE_SYNC_NIGHTLY =
   (process.env.RUN_APC_POLANCO_SUPABASE_SYNC_NIGHTLY ?? "true").toLowerCase() !== "false";
 const RUN_RECEITA_PUBLICA_NIGHTLY = (process.env.RUN_RECEITA_PUBLICA_NIGHTLY ?? "true").toLowerCase() !== "false";
+const RUN_DIM_RECEITA_SQLSERVER_NIGHTLY =
+  (process.env.RUN_DIM_RECEITA_SQLSERVER_NIGHTLY ?? "true").toLowerCase() !== "false";
+const RUN_DIM_ENTE_ENTIDADE_SQLSERVER_NIGHTLY =
+  (process.env.RUN_DIM_ENTE_ENTIDADE_SQLSERVER_NIGHTLY ?? "true").toLowerCase() !== "false";
 
 console.log("ETL scheduler started - Varadouro Digital");
 console.log(`Nightly pipeline: cron="${FACT_ETL_CRON}" timezone="${TIMEZONE}"`);
@@ -25,6 +31,8 @@ console.log(`Nightly dimensoes: ${RUN_DIMENSOES_NIGHTLY ? "enabled" : "disabled"
 console.log(`Nightly APC Polanco: ${RUN_APC_POLANCO_NIGHTLY ? "enabled" : "disabled"}\n`);
 console.log(`Nightly APC->Supabase sync: ${RUN_APC_POLANCO_SUPABASE_SYNC_NIGHTLY ? "enabled" : "disabled"}\n`);
 console.log(`Nightly Receita Publica: ${RUN_RECEITA_PUBLICA_NIGHTLY ? "enabled" : "disabled"}\n`);
+console.log(`Nightly Dimensoes Receita SQL: ${RUN_DIM_RECEITA_SQLSERVER_NIGHTLY ? "enabled" : "disabled"}\n`);
+console.log(`Nightly Dimensoes Ente/Entidade SQL: ${RUN_DIM_ENTE_ENTIDADE_SQLSERVER_NIGHTLY ? "enabled" : "disabled"}\n`);
 
 // Full nightly pipeline: once per day
 cron.schedule(
@@ -59,15 +67,33 @@ cron.schedule(
     }
 
     if (RUN_RECEITA_PUBLICA_NIGHTLY) {
-      console.log("[CRON] Step 4/5: receita publica (SQL Server -> Supabase)");
+      console.log("[CRON] Step 4/7: receita publica (SQL Server -> Supabase)");
       await executarETLReceitaPublica().catch((error) => {
         console.error("[CRON] receita publica failed:", error);
       });
     } else {
-      console.log("[CRON] Step 4/5: receita publica skipped by RUN_RECEITA_PUBLICA_NIGHTLY=false");
+      console.log("[CRON] Step 4/7: receita publica skipped by RUN_RECEITA_PUBLICA_NIGHTLY=false");
     }
 
-    console.log("[CRON] Step 5/5: combustivel (NFE/SQL Server)");
+    if (RUN_DIM_RECEITA_SQLSERVER_NIGHTLY) {
+      console.log("[CRON] Step 5/7: dimensoes receita (SQL Server)");
+      await executarCargaDimensoesReceitaSqlServer().catch((error) => {
+        console.error("[CRON] dimensoes receita sqlserver failed:", error);
+      });
+    } else {
+      console.log("[CRON] Step 5/7: dimensoes receita skipped by RUN_DIM_RECEITA_SQLSERVER_NIGHTLY=false");
+    }
+
+    if (RUN_DIM_ENTE_ENTIDADE_SQLSERVER_NIGHTLY) {
+      console.log("[CRON] Step 6/7: dimensoes ente/entidade (SQL Server)");
+      await executarCargaDimensoesEnteEntidadeSqlServer().catch((error) => {
+        console.error("[CRON] dimensoes ente/entidade sqlserver failed:", error);
+      });
+    } else {
+      console.log("[CRON] Step 6/7: dimensoes ente/entidade skipped by RUN_DIM_ENTE_ENTIDADE_SQLSERVER_NIGHTLY=false");
+    }
+
+    console.log("[CRON] Step 7/7: combustivel (NFE/SQL Server)");
     await executarETLCombustivel().catch((error) => {
       console.error("[CRON] combustivel failed:", error);
     });

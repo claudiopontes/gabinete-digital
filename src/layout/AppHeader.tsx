@@ -2,6 +2,7 @@
 
 import CombustivelHeaderFilters from "@/components/combustivel/CombustivelHeaderFilters";
 import EmpenhoHeaderFilters from "@/components/combustivel/EmpenhoHeaderFilters";
+import ReceitaPublicaHeaderFilters from "@/components/receita-publica/ReceitaPublicaHeaderFilters";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import { useSidebar } from "@/context/SidebarContext";
@@ -17,6 +18,7 @@ const AppHeader: React.FC = () => {
 
   const isCombustivelPage = pathname === "/painel-combustivel";
   const isEmpenhoPage = pathname === "/painel-combustivel-empenhos";
+  const isReceitaPage = pathname === "/painel-receita-publica";
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) toggleSidebar();
@@ -68,6 +70,11 @@ const AppHeader: React.FC = () => {
             {isEmpenhoPage && (
               <Suspense fallback={<div className="h-11 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800" />}>
                 <EmpenhoHeaderFilters />
+              </Suspense>
+            )}
+            {isReceitaPage && (
+              <Suspense fallback={<div className="h-11 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800" />}>
+                <ReceitaPublicaHeaderFilters />
               </Suspense>
             )}
           </div>

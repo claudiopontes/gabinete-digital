@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "r
 import dynamic from "next/dynamic";
 import type { ApexOptions } from "apexcharts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import ReceitaPublicaHeaderFilters from "@/components/receita-publica/ReceitaPublicaHeaderFilters";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
@@ -19,6 +20,11 @@ type ReceitaPublicaRow = {
   id_natureza_receita_orcamentaria: number | string | null;
   id_catreceita: number | string | null;
   codigo: string | null;
+  natureza_codigo: string | null;
+  natureza_nome: string | null;
+  natureza_descricao: string | null;
+  natureza_nivel: number | string | null;
+  natureza_tipo: string | null;
   previsao_inicial: NumericValue;
   previsao_atualizada: NumericValue;
   receita_realizada: NumericValue;
@@ -37,25 +43,11 @@ type ChartKey =
   | "paretoFonte"
   | "contaBar";
 
-type SelectOption = {
-  value: string;
-  label: string;
+type PeriodoMetadata = {
+  ano: number | string | null;
+  mes: number | string | null;
 };
 
-const MESES = [
-  "Jan",
-  "Fev",
-  "Mar",
-  "Abr",
-  "Mai",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Set",
-  "Out",
-  "Nov",
-  "Dez",
-];
 
 function toNumber(value: NumericValue): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -136,15 +128,6 @@ function monthLabelFromKey(key: string): string {
   return `${mes}/${ano}`;
 }
 
-function competenciaLabel(row: ReceitaPublicaRow): string {
-  const ano = Number(row.ano ?? 0);
-  const mes = Number(row.mes ?? 0);
-
-  if (!ano || !mes) return "Sem competência";
-
-  return `${MESES[mes - 1] ?? String(mes)}/${ano}`;
-}
-
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
 
@@ -206,17 +189,6 @@ function fonteLabel(row: ReceitaPublicaRow): string {
   return "Sem fonte informada";
 }
 
-function entidadeLabel(row: ReceitaPublicaRow): string {
-  const idEntidade = toStringValue(row.id_entidade).trim();
-  const idCjur = toStringValue(row.id_entidade_cjur).trim();
-
-  if (idEntidade && idCjur) return `Entidade ${idEntidade} / CJUR ${idCjur}`;
-  if (idEntidade) return `Entidade ${idEntidade}`;
-  if (idCjur) return `CJUR ${idCjur}`;
-
-  return "Sem entidade";
-}
-
 function entidadeValue(row: ReceitaPublicaRow): string {
   return toStringValue(row.id_entidade).trim() || "sem-entidade";
 }
@@ -260,6 +232,7 @@ export default function PainelReceitaPublicaClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReceitaPublicaRow[]>([]);
+  const [periodos, setPeriodos] = useState<PeriodoMetadata[]>([]);
   const [highlightedChart, setHighlightedChart] = useState<ChartKey | null>(null);
 
   const selectedAnoInicio = searchParams.get("anoInicio") ?? "";
@@ -286,12 +259,45 @@ export default function PainelReceitaPublicaClient() {
       }
 
       try {
+        const { data: periodoData, error: periodoError } = await supabase
+          .from("vw_receita_publica_kpis")
+          .select("ano, mes")
+          .order("ano", { ascending: true })
+          .order("mes", { ascending: true });
+
+        if (periodoError) throw periodoError;
+
+        const periodoRows = ((periodoData ?? []) as unknown) as PeriodoMetadata[];
+        const anos = [...new Set(periodoRows.map((row) => Number(row.ano)).filter(Boolean))].sort(
+          (a, b) => a - b,
+        );
+        const latestYear = anos.at(-1);
+
+        if (!latestYear) {
+          if (!active) return;
+          setPeriodos([]);
+          setRows([]);
+          setLoading(false);
+          return;
+        }
+
+        const queryAnoInicio = selectedAnoInicio
+          ? Number(selectedAnoInicio)
+          : selectedAnoFim
+            ? Number(selectedAnoFim)
+            : latestYear - 1;
+        const queryAnoFim = selectedAnoFim
+          ? Number(selectedAnoFim)
+          : selectedAnoInicio
+            ? latestYear
+            : latestYear;
+
         const pageSize = 1000;
         let offset = 0;
         const out: ReceitaPublicaRow[] = [];
 
         while (true) {
-          const { data, error } = await supabase
+          let query = supabase
             .from("receita_publica_categoria_mensal")
             .select(
               [
@@ -303,6 +309,11 @@ export default function PainelReceitaPublicaClient() {
                 "id_natureza_receita_orcamentaria",
                 "id_catreceita",
                 "codigo",
+                "natureza_codigo",
+                "natureza_nome",
+                "natureza_descricao",
+                "natureza_nivel",
+                "natureza_tipo",
                 "previsao_inicial",
                 "previsao_atualizada",
                 "receita_realizada",
@@ -313,9 +324,17 @@ export default function PainelReceitaPublicaClient() {
                 "tipo_receita",
               ].join(", "),
             )
+            .gte("ano", queryAnoInicio)
+            .lte("ano", queryAnoFim)
             .order("ano", { ascending: true })
             .order("mes", { ascending: true })
             .range(offset, offset + pageSize - 1);
+
+          if (selectedMes !== "all") query = query.eq("mes", Number(selectedMes));
+          if (selectedTipo !== "all") query = query.eq("tipo_receita", selectedTipo);
+          if (selectedEntidade !== "all") query = query.eq("id_entidade", selectedEntidade);
+
+          const { data, error } = await query;
 
           if (error) throw error;
 
@@ -328,6 +347,7 @@ export default function PainelReceitaPublicaClient() {
 
         if (!active) return;
 
+        setPeriodos(periodoRows);
         setRows(out);
         setLoading(false);
       } catch (err) {
@@ -343,63 +363,38 @@ export default function PainelReceitaPublicaClient() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [selectedAnoInicio, selectedAnoFim, selectedMes, selectedTipo, selectedEntidade]);
 
   const availableYears = useMemo(() => {
-    return [...new Set(rows.map((row) => Number(row.ano)).filter(Boolean))].sort(
+    const source = periodos.length > 0 ? periodos : rows;
+    return [...new Set(source.map((row) => Number(row.ano)).filter(Boolean))].sort(
       (a, b) => a - b,
     );
-  }, [rows]);
+  }, [periodos, rows]);
 
-  const availableMonths = useMemo<SelectOption[]>(() => {
-    return [...new Set(rows.map((row) => Number(row.mes)).filter(Boolean))]
-      .sort((a, b) => a - b)
-      .map((mes) => ({
-        value: String(mes),
-        label: MESES[mes - 1] ?? String(mes),
-      }));
-  }, [rows]);
+  const defaultAnoInicio = useMemo(() => {
+    const latest = availableYears.at(-1);
+    return latest ? String(latest - 1) : "";
+  }, [availableYears]);
 
-  const availableCategorias = useMemo<SelectOption[]>(() => {
-    return [...new Set(rows.map(categoriaEconomica))]
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((item) => ({ value: item, label: item }));
-  }, [rows]);
+  const defaultAnoFim = useMemo(() => {
+    const latest = availableYears.at(-1);
+    return latest ? String(latest) : "";
+  }, [availableYears]);
 
-  const availableFontes = useMemo<SelectOption[]>(() => {
-    return [...new Set(rows.map(fonteLabel))]
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((item) => ({ value: item, label: item }));
-  }, [rows]);
-
-  const availableTipos = useMemo<SelectOption[]>(() => {
-    return [...new Set(rows.map(tipoReceitaLabel))]
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((item) => ({ value: item, label: item }));
-  }, [rows]);
-
-  const availableEntidades = useMemo<SelectOption[]>(() => {
-    const map = new Map<string, string>();
-
-    rows.forEach((row) => {
-      map.set(entidadeValue(row), entidadeLabel(row));
-    });
-
-    return [...map.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1], "pt-BR"))
-      .map(([value, label]) => ({ value, label }));
-  }, [rows]);
+  const displayedAnoInicio = selectedAnoInicio || defaultAnoInicio;
+  const displayedAnoFim = selectedAnoFim || defaultAnoFim;
 
   const filteredRows = useMemo(() => {
     let result = rows;
 
-    if (selectedAnoInicio) {
-      const inicio = Number(selectedAnoInicio);
+    if (displayedAnoInicio) {
+      const inicio = Number(displayedAnoInicio);
       result = result.filter((row) => Number(row.ano) >= inicio);
     }
 
-    if (selectedAnoFim) {
-      const fim = Number(selectedAnoFim);
+    if (displayedAnoFim) {
+      const fim = Number(displayedAnoFim);
       result = result.filter((row) => Number(row.ano) <= fim);
     }
 
@@ -426,8 +421,8 @@ export default function PainelReceitaPublicaClient() {
     return result;
   }, [
     rows,
-    selectedAnoInicio,
-    selectedAnoFim,
+    displayedAnoInicio,
+    displayedAnoFim,
     selectedMes,
     selectedCategoria,
     selectedFonte,
@@ -474,16 +469,6 @@ export default function PainelReceitaPublicaClient() {
         .size,
     };
   }, [filteredRows]);
-
-  const latestCompetencia = useMemo(() => {
-    const sorted = [...rows]
-      .filter((row) => Number(row.ano) && Number(row.mes))
-      .sort((a, b) => monthKey(a).localeCompare(monthKey(b)));
-
-    const latest = sorted.at(-1);
-
-    return latest ? competenciaLabel(latest) : "Sem carga";
-  }, [rows]);
 
   const kpiVariation = useMemo(() => {
     const grouped = new Map<string, { previsao: number; realizada: number }>();
@@ -650,28 +635,6 @@ export default function PainelReceitaPublicaClient() {
       else params.set(key, value);
     });
   }
-
-  function clearAllFilters() {
-    router.replace(pathname, { scroll: false });
-  }
-
-  const hasActiveFilters =
-    selectedAnoInicio !== "" ||
-    selectedAnoFim !== "" ||
-    selectedMes !== "all" ||
-    selectedCategoria !== "all" ||
-    selectedFonte !== "all" ||
-    selectedTipo !== "all" ||
-    selectedEntidade !== "all";
-
-  const activeFilterCount =
-    (selectedAnoInicio !== "" ? 1 : 0) +
-    (selectedAnoFim !== "" ? 1 : 0) +
-    (selectedMes !== "all" ? 1 : 0) +
-    (selectedCategoria !== "all" ? 1 : 0) +
-    (selectedFonte !== "all" ? 1 : 0) +
-    (selectedTipo !== "all" ? 1 : 0) +
-    (selectedEntidade !== "all" ? 1 : 0);
 
   const lineOptions: ApexOptions = {
     chart: {
@@ -1028,6 +991,43 @@ export default function PainelReceitaPublicaClient() {
     printWindow.print();
   };
 
+  const renderExpandedChart = (chart: ChartKey) => {
+    switch (chart) {
+      case "line":
+        return <Chart options={lineOptions} series={lineSeries} type="line" height={520} />;
+      case "tipoDonut":
+        return tipoDonutSeries.some((value) => value > 0) ? (
+          <Chart options={tipoDonutOptions} series={tipoDonutSeries} type="donut" height={520} />
+        ) : (
+          <EmptyChart message="Sem dados por tipo para o recorte atual." />
+        );
+      case "categoriaBar":
+        return categoriaBar.length > 0 ? (
+          <Chart options={categoriaBarOptions} series={categoriaBarSeries} type="bar" height={520} />
+        ) : (
+          <EmptyChart message="Sem dados por categoria para o recorte atual." />
+        );
+      case "fonteBar":
+        return fonteBar.length > 0 ? (
+          <Chart options={fonteBarOptions} series={fonteBarSeries} type="bar" height={520} />
+        ) : (
+          <EmptyChart message="Sem dados por fonte para o recorte atual." />
+        );
+      case "paretoFonte":
+        return paretoFonte.length > 0 ? (
+          <Chart options={paretoOptions} series={paretoSeries} type="line" height={520} />
+        ) : (
+          <EmptyChart message="Sem dados para o Pareto no recorte atual." />
+        );
+      case "contaBar":
+        return contaBar.length > 0 ? (
+          <Chart options={contaBarOptions} series={contaBarSeries} type="bar" height={520} />
+        ) : (
+          <EmptyChart message="Sem dados por conta contábil para o recorte atual." />
+        );
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-16 text-gray-400">
@@ -1056,121 +1056,9 @@ export default function PainelReceitaPublicaClient() {
 
   return (
     <div className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden pb-2">
-      <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
-              Varadouro Digital
-            </p>
-
-            <h1 className="mt-1 text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
-              Painel da Receita Pública
-            </h1>
-
-            <p className="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-              Dados carregados pelo ETL a partir da view SQL Server{" "}
-              <span className="font-semibold text-gray-700 dark:text-gray-200">
-                audit.vw_ReceitaPorCategoria
-              </span>{" "}
-              e publicados na tabela Supabase{" "}
-              <span className="font-semibold text-gray-700 dark:text-gray-200">
-                receita_publica_categoria_mensal
-              </span>
-              .
-            </p>
-          </div>
-
-          <div className="min-w-60 rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-sky-800 shadow-sm shadow-sky-100/70 dark:border-sky-800/60 dark:bg-slate-900/30 dark:text-sky-200 dark:shadow-none">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-400">
-              Fonte dos dados
-            </p>
-            <p className="mt-1 font-bold">SQL Server → Supabase</p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-400">
-              Competência mais recente
-            </p>
-            <p className="mt-1 font-bold">{latestCompetencia}</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1">
-          <FilterSelect
-            label="Ano início"
-            value={selectedAnoInicio}
-            placeholder="Todos"
-            options={availableYears.map((year) => ({
-              value: String(year),
-              label: String(year),
-            }))}
-            onChange={(value) => setFilter("anoInicio", value)}
-          />
-
-          <FilterSelect
-            label="Ano fim"
-            value={selectedAnoFim}
-            placeholder="Todos"
-            options={availableYears.map((year) => ({
-              value: String(year),
-              label: String(year),
-            }))}
-            onChange={(value) => setFilter("anoFim", value)}
-          />
-
-          <FilterSelect
-            label="Mês"
-            value={selectedMes}
-            placeholder="Todos"
-            options={availableMonths}
-            onChange={(value) => setFilter("mes", value)}
-          />
-
-          <FilterSelect
-            label="Categoria"
-            value={selectedCategoria}
-            placeholder="Todas"
-            options={availableCategorias}
-            minWidth={230}
-            onChange={(value) => setFilter("categoria", value)}
-          />
-
-          <FilterSelect
-            label="Fonte"
-            value={selectedFonte}
-            placeholder="Todas"
-            options={availableFontes}
-            minWidth={260}
-            onChange={(value) => setFilter("fonte", value)}
-          />
-
-          <FilterSelect
-            label="Tipo"
-            value={selectedTipo}
-            placeholder="Todos"
-            options={availableTipos}
-            onChange={(value) => setFilter("tipo", value)}
-          />
-
-          <FilterSelect
-            label="Entidade"
-            value={selectedEntidade}
-            placeholder="Todas"
-            options={availableEntidades}
-            minWidth={210}
-            onChange={(value) => setFilter("entidade", value)}
-          />
-
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="h-11 shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-800/70 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/35"
-            >
-              Limpar filtros ({activeFilterCount})
-            </button>
-          )}
-        </div>
-      </section>
+      <div className="lg:hidden">
+        <ReceitaPublicaHeaderFilters />
+      </div>
 
       <section className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
@@ -1254,7 +1142,6 @@ export default function PainelReceitaPublicaClient() {
           )}
         </ChartCard>
       </section>
-
       <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <ChartCard
           chartKey="categoriaBar"
@@ -1359,6 +1246,52 @@ export default function PainelReceitaPublicaClient() {
         </ChartCard>
       </section>
 
+      {highlightedChart && (
+        <div
+          className="fixed inset-0 z-999999 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={chartMeta[highlightedChart].title}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setHighlightedChart(null);
+          }}
+        >
+          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
+                  {chartMeta[highlightedChart].title}
+                </h2>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Visualização ampliada do gráfico no recorte atual.
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => printChart(highlightedChart)}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Imprimir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHighlightedChart(null)}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 overflow-auto p-4">
+              <div className="min-w-[760px]">{renderExpandedChart(highlightedChart)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -1427,42 +1360,6 @@ export default function PainelReceitaPublicaClient() {
   );
 }
 
-function FilterSelect({
-  label,
-  value,
-  placeholder,
-  options,
-  onChange,
-  minWidth = 160,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  options: SelectOption[];
-  onChange: (value: string) => void;
-  minWidth?: number;
-}) {
-  return (
-    <label
-      className="block shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400"
-      style={{ minWidth }}
-    >
-      <span className="mb-1 block">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-      >
-        <option value="all">{placeholder}</option>
-        {options.map((option) => (
-          <option key={`${label}-${option.value}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
 
 function KpiCard({
   title,
@@ -1554,20 +1451,20 @@ function ChartCard({
         </div>
 
         <details className="relative shrink-0">
-          <summary className="cursor-pointer list-none rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700">
+          <summary className="inline-flex list-none cursor-pointer select-none items-center rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700">
             Ações
           </summary>
 
-          <div className="absolute right-0 z-20 mt-1 w-32 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+          <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
             <button
               type="button"
               onClick={(event) => {
                 onCloseActions(event);
                 onHighlight();
               }}
-              className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="w-full rounded-md px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              {isHighlighted ? "Remover destaque" : "Destacar"}
+              {isHighlighted ? "Remover visualização" : "Visualizar"}
             </button>
 
             <button
@@ -1576,7 +1473,7 @@ function ChartCard({
                 onCloseActions(event);
                 onPrint();
               }}
-              className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="w-full rounded-md px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               Imprimir
             </button>

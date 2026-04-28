@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import SeletorMunicipio, { type MunicipioBase } from "@/components/Maps/SeletorMunicipioWrapper";
 import { useState } from "react";
@@ -13,7 +13,7 @@ export default function SeletorMunicipioPage() {
           Selecionar Município
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Clique no mapa ou use a lista para selecionar um município do Acre.
+          Clique no mapa ou use a lista para selecionar um Município do Acre.
         </p>
       </div>
 
@@ -31,3 +31,4 @@ export default function SeletorMunicipioPage() {
     </div>
   );
 }
+
