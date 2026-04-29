@@ -85,6 +85,15 @@ const AppHeader: React.FC = () => {
           className={`${isApplicationMenuOpen ? "flex" : "hidden"} w-full min-w-0 items-center justify-between gap-4 overflow-x-auto px-5 py-4 shadow-theme-md lg:flex lg:w-auto lg:max-w-full lg:justify-end lg:overflow-visible lg:px-0 lg:shadow-none`}
         >
           <div className="flex min-w-max items-center gap-2 2xsm:gap-3 lg:min-w-0">
+            {isReceitaPage && (
+              <nav className="hidden items-center gap-1 text-sm lg:flex">
+                <Link href="/" className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">Home</Link>
+                <span className="text-gray-300 dark:text-gray-600">/</span>
+                <span className="text-gray-400 dark:text-gray-500">Painéis</span>
+                <span className="text-gray-300 dark:text-gray-600">/</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">Receita Pública</span>
+              </nav>
+            )}
             <ThemeToggleButton />
             <NotificationDropdown />
           </div>

@@ -11,6 +11,7 @@
     "dimensoes-ente-entidade-sqlserver": "ts-node jobs/dimensoes-ente-entidade-sqlserver.ts",
     "dimensoes-receita-sqlserver": "ts-node jobs/dimensoes-receita-sqlserver.ts",
     "receita-publica": "ts-node jobs/receita-publica.ts",
+    "populacao-ibge": "ts-node jobs/populacao-ibge.ts",
     "agendar": "ts-node schedule.ts"
   },
   "dependencies": {

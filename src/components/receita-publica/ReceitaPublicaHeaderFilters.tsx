@@ -9,12 +9,6 @@ type NumericValue = number | string | null;
 type ReceitaFiltroRow = {
   ano: number | string | null;
   mes: number | string | null;
-  codigo: string | null;
-  id_catreceita: number | string | null;
-  tipo_receita: string | null;
-  fonte_nome: string | null;
-  fonte_classificacao: string | null;
-  numero_fonte_recurso: number | string | null;
   id_entidade: number | string | null;
   id_entidade_cjur: number | string | null;
 };
@@ -32,58 +26,19 @@ type SelectOption = {
 type EntidadeNomeRow = {
   id_entidade: number | string | null;
   id_entidade_cjur?: number | string | null;
+  id_ente?: number | string | null;
   entidade?: string | null;
   nome?: string | null;
+};
+
+type EnteRow = {
+  id_ente: number | string | null;
+  nome: string | null;
 };
 
 function toStringValue(value: NumericValue | undefined): string {
   if (value === null || value === undefined || value === "") return "";
   return String(value);
-}
-
-function tipoReceitaLabel(row: ReceitaFiltroRow): string {
-  const value = toStringValue(row.tipo_receita).trim().toUpperCase();
-  if (!value) return "NORMAL";
-  if (value.includes("DEDU")) return "DEDUÇÃO";
-  return value;
-}
-
-function codigoReceita(row: ReceitaFiltroRow): string {
-  return toStringValue(row.codigo || row.id_catreceita).trim();
-}
-
-function categoriaEconomica(row: ReceitaFiltroRow): string {
-  const tipo = tipoReceitaLabel(row);
-  const codigo = codigoReceita(row);
-
-  if (tipo === "DEDUÇÃO") return "Dedução da Receita";
-
-  switch (codigo.charAt(0)) {
-    case "1":
-      return "Receitas Correntes";
-    case "2":
-      return "Receitas de Capital";
-    case "7":
-      return "Receitas Correntes Intraorçamentárias";
-    case "8":
-      return "Receitas de Capital Intraorçamentárias";
-    case "9":
-      return "Dedução da Receita";
-    default:
-      return codigo ? `Categoria ${codigo}` : "Sem categoria";
-  }
-}
-
-function fonteLabel(row: ReceitaFiltroRow): string {
-  const nome = toStringValue(row.fonte_nome).trim();
-  const classificacao = toStringValue(row.fonte_classificacao).trim();
-  const numero = toStringValue(row.numero_fonte_recurso).trim();
-
-  if (nome) return nome;
-  if (classificacao && numero) return `${numero} - ${classificacao}`;
-  if (classificacao) return classificacao;
-  if (numero) return `Fonte ${numero}`;
-  return "Sem fonte informada";
 }
 
 function entidadeValue(row: ReceitaFiltroRow): string {
@@ -110,13 +65,14 @@ export default function ReceitaPublicaHeaderFilters() {
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([]);
   const [entidadeNomes, setEntidadeNomes] = useState<Map<string, string>>(new Map());
   const [entidadeOptions, setEntidadeOptions] = useState<SelectOption[]>([]);
-  const [dialog, setDialog] = useState<null | "anoInicio" | "anoFim" | "categoria" | "fonte" | "entidade">(null);
+  const [entidadeEnteMap, setEntidadeEnteMap] = useState<Map<string, string>>(new Map());
+  const [municipioOptions, setMunicipioOptions] = useState<SelectOption[]>([]);
+  const [dialog, setDialog] = useState<null | "anoInicio" | "anoFim" | "municipio" | "entidade">(null);
 
   const selectedAnoInicio = searchParams.get("anoInicio") ?? "";
-  const selectedAnoFim = searchParams.get("anoFim") ?? "";
-  const selectedCategoria = searchParams.get("categoria") ?? "all";
-  const selectedFonte = searchParams.get("fonte") ?? "all";
-  const selectedEntidade = searchParams.get("entidade") ?? "all";
+  const selectedAnoFim    = searchParams.get("anoFim")    ?? "";
+  const selectedMunicipio = searchParams.get("municipio") ?? "all";
+  const selectedEntidade  = searchParams.get("entidade")  ?? "all";
 
   useEffect(() => {
     let active = true;
@@ -132,36 +88,38 @@ export default function ReceitaPublicaHeaderFilters() {
       }
 
       try {
-        const [periodosResult, rowsResult, dimEntidadeResult, combustivelEntidadeResult] = await Promise.allSettled([
+        const [periodosResult, rowsResult, dimEntidadeResult, combustivelEntidadeResult, dimEnteResult] = await Promise.allSettled([
           supabase.from("vw_receita_publica_kpis").select("ano, mes").order("ano", { ascending: true }).order("mes", { ascending: true }),
           supabase
             .from("receita_publica_categoria_mensal")
-            .select("ano, mes, codigo, id_catreceita, tipo_receita, fonte_nome, fonte_classificacao, numero_fonte_recurso, id_entidade, id_entidade_cjur")
+            .select("ano, mes, id_entidade, id_entidade_cjur")
             .order("ano", { ascending: false })
             .order("mes", { ascending: false })
             .range(0, 4999),
-          supabase.from("dim_entidade").select("id_entidade, id_entidade_cjur, nome").range(0, 9999),
+          supabase.from("dim_entidade").select("id_entidade, id_entidade_cjur, id_ente, nome").range(0, 9999),
           supabase.from("tb_despesa_combustivel_polanco").select("id_entidade, entidade").range(0, 9999),
+          supabase.from("dim_ente").select("id_ente, nome").order("nome", { ascending: true }).range(0, 9999),
         ]);
 
         const periodosData = periodosResult.status === "fulfilled" ? ((periodosResult.value.data ?? []) as PeriodoRow[]) : [];
         const rowsData = rowsResult.status === "fulfilled" ? ((rowsResult.value.data ?? []) as ReceitaFiltroRow[]) : [];
         const dimEntidadeData = dimEntidadeResult.status === "fulfilled" ? ((dimEntidadeResult.value.data ?? []) as EntidadeNomeRow[]) : [];
-        const combustivelEntidadeData =
-          combustivelEntidadeResult.status === "fulfilled" ? ((combustivelEntidadeResult.value.data ?? []) as EntidadeNomeRow[]) : [];
+        const combustivelEntidadeData = combustivelEntidadeResult.status === "fulfilled" ? ((combustivelEntidadeResult.value.data ?? []) as EntidadeNomeRow[]) : [];
+        const dimEnteData = dimEnteResult.status === "fulfilled" ? ((dimEnteResult.value.data ?? []) as EnteRow[]) : [];
 
         const nomeMap = new Map<string, string>();
         const dimOptionsMap = new Map<string, string>();
+        const enteMap = new Map<string, string>(); // id_entidade → id_ente
         dimEntidadeData.forEach((r) => {
-          const idEnt = toStringValue(r.id_entidade).trim();
+          const idEnt  = toStringValue(r.id_entidade).trim();
           const idCjur = toStringValue(r.id_entidade_cjur).trim();
-          const nome = toStringValue(r.nome).trim();
+          const idEnte = toStringValue(r.id_ente).trim();
+          const nome   = toStringValue(r.nome).trim();
           if (!nome) return;
-          if (idEnt && !nomeMap.has(idEnt)) nomeMap.set(idEnt, nome);
+          if (idEnt  && !nomeMap.has(idEnt))  nomeMap.set(idEnt, nome);
           if (idCjur && !nomeMap.has(idCjur)) nomeMap.set(idCjur, nome);
-          // Para o seletor, usamos apenas id_entidade para evitar duplicidade
-          // visual da mesma entidade (id_entidade vs id_entidade_cjur).
-          if (idEnt && !dimOptionsMap.has(idEnt)) dimOptionsMap.set(idEnt, nome);
+          if (idEnt  && !dimOptionsMap.has(idEnt)) dimOptionsMap.set(idEnt, nome);
+          if (idEnt  && idEnte) enteMap.set(idEnt, idEnte);
         });
         combustivelEntidadeData.forEach((r) => {
           const idEnt = toStringValue(r.id_entidade).trim();
@@ -181,11 +139,17 @@ export default function ReceitaPublicaHeaderFilters() {
           })
           .map(([value, label]) => ({ value, label }));
 
+        const munOptions = dimEnteData
+          .filter((e) => e.id_ente != null && e.nome)
+          .map((e) => ({ value: String(e.id_ente), label: String(e.nome) }));
+
         if (!active) return;
         setPeriodos(periodosData);
         setRows(rowsData);
         setEntidadeNomes(nomeMap);
         setEntidadeOptions(dimOptions);
+        setEntidadeEnteMap(enteMap);
+        setMunicipioOptions(munOptions);
       } catch (error) {
         console.error("Falha ao carregar filtros da receita pública:", error);
         if (!active) return;
@@ -193,6 +157,7 @@ export default function ReceitaPublicaHeaderFilters() {
         setRows([]);
         setEntidadeNomes(new Map());
         setEntidadeOptions([]);
+        setMunicipioOptions([]);
       } finally {
         if (active) {
           setLoading(false);
@@ -248,33 +213,33 @@ export default function ReceitaPublicaHeaderFilters() {
   const displayedAnoInicio = selectedAnoInicio || defaultAnoInicio;
   const displayedAnoFim = selectedAnoFim || defaultAnoFim;
 
-  const availableCategorias = useMemo<SelectOption[]>(
-    () =>
-      [...new Set(rows.map(categoriaEconomica))]
-        .sort((a, b) => a.localeCompare(b, "pt-BR"))
-        .map((item) => ({ value: item, label: item })),
-    [rows],
-  );
-
-  const availableFontes = useMemo<SelectOption[]>(
-    () =>
-      [...new Set(rows.map(fonteLabel))]
-        .sort((a, b) => a.localeCompare(b, "pt-BR"))
-        .map((item) => ({ value: item, label: item })),
-    [rows],
-  );
-
   const availableEntidades = useMemo<SelectOption[]>(() => {
-    if (entidadeOptions.length > 0) return entidadeOptions;
-    const map = new Map<string, string>();
-    rows.forEach((row) => {
-      const value = entidadeValue(row);
-      map.set(value, entidadeNomes.get(value) ?? entidadeFallbackLabel(row));
-    });
-    return [...map.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1], "pt-BR"))
-      .map(([value, label]) => ({ value, label }));
-  }, [entidadeOptions, rows, entidadeNomes]);
+    const base = entidadeOptions.length > 0 ? entidadeOptions : (() => {
+      const map = new Map<string, string>();
+      rows.forEach((row) => {
+        const value = entidadeValue(row);
+        map.set(value, entidadeNomes.get(value) ?? entidadeFallbackLabel(row));
+      });
+      return [...map.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], "pt-BR"))
+        .map(([value, label]) => ({ value, label }));
+    })();
+
+    if (!selectedMunicipio || selectedMunicipio === "all") return base;
+    return base.filter((opt) => entidadeEnteMap.get(opt.value) === selectedMunicipio);
+  }, [entidadeOptions, rows, entidadeNomes, entidadeEnteMap, selectedMunicipio]);
+
+  // Limpa entidade selecionada quando ela não pertence ao município recém-escolhido
+  useEffect(() => {
+    if (selectedEntidade === "all") return;
+    if (!selectedMunicipio || selectedMunicipio === "all") return;
+    if (entidadeEnteMap.size === 0) return;
+    if (entidadeEnteMap.get(selectedEntidade) !== selectedMunicipio) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("entidade");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    }
+  }, [selectedMunicipio, selectedEntidade, entidadeEnteMap, searchParams, pathname, router]);
 
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -285,34 +250,26 @@ export default function ReceitaPublicaHeaderFilters() {
 
   const clearAllFilters = () => {
     const next = new URLSearchParams(searchParams.toString());
-    next.delete("categoria");
-    next.delete("fonte");
+    next.delete("municipio");
     next.delete("entidade");
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
 
-  const hasActiveFilters = selectedCategoria !== "all" || selectedFonte !== "all" || selectedEntidade !== "all";
-
-  const activeFilterCount = [
-    selectedCategoria !== "all" ? selectedCategoria : "",
-    selectedFonte !== "all" ? selectedFonte : "",
-    selectedEntidade !== "all" ? selectedEntidade : "",
-  ].filter(Boolean).length;
+  const hasActiveFilters = selectedMunicipio !== "all" || selectedEntidade !== "all";
+  const activeFilterCount = [selectedMunicipio !== "all", selectedEntidade !== "all"].filter(Boolean).length;
 
   const optionsByDialog: Record<NonNullable<typeof dialog>, SelectOption[]> = {
-    anoInicio: availableYears.map((y) => ({ value: String(y), label: String(y) })),
-    anoFim: availableYears.map((y) => ({ value: String(y), label: String(y) })),
-    categoria: availableCategorias,
-    fonte: availableFontes,
-    entidade: availableEntidades,
+    anoInicio:  availableYears.map((y) => ({ value: String(y), label: String(y) })),
+    anoFim:     availableYears.map((y) => ({ value: String(y), label: String(y) })),
+    municipio:  municipioOptions,
+    entidade:   availableEntidades,
   };
 
   const valueByDialog: Record<NonNullable<typeof dialog>, string> = {
-    anoInicio: displayedAnoInicio,
-    anoFim: displayedAnoFim,
-    categoria: selectedCategoria,
-    fonte: selectedFonte,
-    entidade: selectedEntidade,
+    anoInicio:  displayedAnoInicio,
+    anoFim:     displayedAnoFim,
+    municipio:  selectedMunicipio,
+    entidade:   selectedEntidade,
   };
 
   return (
@@ -325,8 +282,7 @@ export default function ReceitaPublicaHeaderFilters() {
           <button type="button" onClick={() => setDialog("anoFim")} className="h-7 rounded-md border border-gray-200 bg-transparent px-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">{displayedAnoFim || "—"}</button>
         </div>
 
-        <FilterTrigger label="Categoria" value={selectedCategoria} placeholder="Todas" options={availableCategorias} onClick={() => setDialog("categoria")} />
-        <FilterTrigger label="Fonte" value={selectedFonte} placeholder="Todas" options={availableFontes} onClick={() => setDialog("fonte")} />
+        <FilterTrigger label="Ente" value={selectedMunicipio} placeholder="Todos" options={municipioOptions} onClick={() => setDialog("municipio")} />
         <FilterTrigger label="Entidade" value={selectedEntidade} placeholder="Todas" options={availableEntidades} onClick={() => setDialog("entidade")} />
 
         {hasActiveFilters ? (
@@ -340,14 +296,12 @@ export default function ReceitaPublicaHeaderFilters() {
         key={dialog ?? "closed"}
         title={
           dialog === "anoInicio"
-            ? "Selecionar ano"
+            ? "Selecionar ano inicial"
             : dialog === "anoFim"
               ? "Selecionar ano final"
-              : dialog === "categoria"
-                ? "Selecionar categoria"
-                : dialog === "fonte"
-                  ? "Selecionar fonte"
-                  : "Selecionar entidade"
+              : dialog === "municipio"
+                ? "Selecionar ente"
+                : "Selecionar entidade"
         }
         isOpen={dialog !== null}
         value={dialog ? valueByDialog[dialog] : "all"}
@@ -357,8 +311,7 @@ export default function ReceitaPublicaHeaderFilters() {
         onSelect={(value) => {
           if (dialog === "anoInicio") setFilter("anoInicio", value);
           else if (dialog === "anoFim") setFilter("anoFim", value);
-          else if (dialog === "categoria") setFilter("categoria", value);
-          else if (dialog === "fonte") setFilter("fonte", value);
+          else if (dialog === "municipio") setFilter("municipio", value);
           else if (dialog === "entidade") setFilter("entidade", value);
         }}
       />

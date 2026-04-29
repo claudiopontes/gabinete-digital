@@ -47,7 +47,7 @@ const MODULO = "receita_publica";
 const supabase = getSupabase();
 
 const SQL_DATABASE = process.env.RECEITA_PUBLICA_SQLSERVER_DATABASE || process.env.SQLSERVER_APC_DATABASE || "APC";
-const SOURCE_VIEW = process.env.RECEITA_PUBLICA_SOURCE_VIEW || "audit.vw_ReceitaPorCategoria";
+const SOURCE_VIEW = process.env.RECEITA_PUBLICA_SOURCE_VIEW || "audit.vw_ReceitaPorCategoria_Polanco";
 const SUPABASE_TABLE = process.env.RECEITA_PUBLICA_SUPABASE_TABLE || "receita_publica_categoria_mensal";
 const MODO_CARGA = normalizeModo(process.env.RECEITA_PUBLICA_MODO_CARGA || "INCREMENTAL");
 const LOOKBACK_MESES = toNonNegativeInt(Number(process.env.RECEITA_PUBLICA_LOOKBACK_MESES || "3"), 3);
@@ -202,6 +202,9 @@ GROUP BY
   r.NUMERO_FONTE_RECURSO,
   r.CODIGO_CONTA_CONTABIL,
   r.TIPO_RECEITA
+HAVING SUM(r.PREVISAO_INICIAL) <> 0
+    OR SUM(r.PREVISAO_ATUALIZADA) <> 0
+    OR SUM(r.RECEITA_REALIZADA) <> 0
 ORDER BY r.ANO, r.MES, r.ID_ENTIDADE, r.CODIGO;
 `;
 
